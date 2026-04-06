@@ -1,4 +1,4 @@
-.PHONY: help setup install dev test lint format clean run run-api docker-build docker-run
+.PHONY: help setup install install-sys-deps install-dev dev test lint format clean run run-api docker-build docker-run
 
 help:
 	@echo "JARVIS 2.0 - Development Commands"
@@ -6,6 +6,7 @@ help:
 	@echo ""
 	@echo "Setup & Installation:"
 	@echo "  make setup          - Initial project setup"
+	@echo "  make install-sys-deps - Install system deps (portaudio, etc.) via apt-get"
 	@echo "  make install        - Install dependencies"
 	@echo "  make install-dev    - Install dev dependencies"
 	@echo ""
@@ -43,6 +44,11 @@ install:
 	pip install --upgrade pip
 	pip install -r requirements.txt
 	@echo "Dependencies installed!"
+
+install-sys-deps:
+	@echo "Installing system dependencies for pyaudio (PortAudio)..."
+	sudo apt-get update && sudo apt-get install -y portaudio19-dev python3-dev build-essential
+	@echo "System dependencies installed! Now run: make install"
 
 install-dev:
 	pip install --upgrade pip

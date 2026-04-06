@@ -37,18 +37,23 @@
 ### One-Minute Setup
 
 ```bash
-# 1. Clone the repository
+# 1. Install system dependencies (required for pyaudio / PortAudio)
+# Debian / Ubuntu / WSL:
+sudo apt-get update && sudo apt-get install -y portaudio19-dev python3-dev build-essential
+# macOS: brew install portaudio
+
+# 2. Clone the repository
 git clone https://github.com/UdaySoni32/Jarvis-2.0.git
 cd Jarvis-2.0
 
-# 2. Create virtual environment
+# 3. Create virtual environment
 python -m venv venv
 source venv/bin/activate
 
-# 3. Install dependencies
+# 4. Install dependencies
 pip install -r requirements.txt
 
-# 4. Run JARVIS (setup wizard will guide you!)
+# 5. Run JARVIS (setup wizard will guide you!)
 python -m src.cli
 ```
 

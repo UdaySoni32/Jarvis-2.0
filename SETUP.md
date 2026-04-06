@@ -23,6 +23,23 @@ This guide will walk you through setting up JARVIS 2.0 from scratch, step by ste
 - **Python 3.14+** (or 3.11+)
 - **Git** (for cloning the repository)
 - **Linux/macOS/WSL** (tested on Linux)
+- **System build dependencies** (for compiling native extensions like `pyaudio`)
+
+  On **Debian/Ubuntu/WSL**:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install -y portaudio19-dev python3-dev build-essential
+  ```
+
+  On **Fedora/RHEL/CentOS**:
+  ```bash
+  sudo dnf install -y portaudio-devel python3-devel gcc
+  ```
+
+  On **macOS** (with Homebrew):
+  ```bash
+  brew install portaudio
+  ```
 
 ### Optional
 
@@ -370,7 +387,30 @@ JARVIS: Your favorite color is blue! You told me earlier.
 
 ### Common Issues
 
-#### 1. "ModuleNotFoundError: No module named 'XXX'"
+#### 1. "Failed building wheel for pyaudio" / `portaudio.h: No such file or directory`
+
+**Cause:** The `pyaudio` package compiles a C extension that requires the PortAudio system library headers.
+
+**Solution:** Install the system library before running `pip install -r requirements.txt`.
+
+```bash
+# Debian / Ubuntu / WSL
+sudo apt-get update
+sudo apt-get install -y portaudio19-dev python3-dev build-essential
+
+# Fedora / RHEL / CentOS
+sudo dnf install -y portaudio-devel python3-devel gcc
+
+# macOS (Homebrew)
+brew install portaudio
+```
+
+Then retry:
+```bash
+pip install -r requirements.txt
+```
+
+#### 2. "ModuleNotFoundError: No module named 'XXX'"
 
 **Solution:** Make sure virtual environment is activated and dependencies are installed.
 
@@ -382,7 +422,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-#### 2. "OpenAI API Error: Invalid API Key"
+#### 3. "OpenAI API Error: Invalid API Key"
 
 **Solution:** Check your API key in `.env` file.
 
@@ -397,7 +437,7 @@ cat .env
 python -m src.cli
 ```
 
-#### 3. "Ollama connection error"
+#### 4. "Ollama connection error"
 
 **Solution:** Make sure Ollama server is running.
 
@@ -412,7 +452,7 @@ ollama serve
 python -m src.cli
 ```
 
-#### 4. "Permission denied" when running JARVIS
+#### 5. "Permission denied" when running JARVIS
 
 **Solution:** Make sure you have write permissions.
 
@@ -424,7 +464,7 @@ ls -la user_data/
 chmod -R 755 user_data/
 ```
 
-#### 5. Tests failing
+#### 6. Tests failing
 
 **Solution:** Run tests individually to identify the issue.
 

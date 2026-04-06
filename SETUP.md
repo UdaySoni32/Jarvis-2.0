@@ -52,10 +52,10 @@ python3.14 --version
 cd ~
 
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/jarvis-2.0.git
+git clone https://github.com/UdaySoni32/Jarvis-2.0.git
 
 # Navigate into the directory
-cd jarvis-2.0
+cd Jarvis-2.0
 ```
 
 ### Step 2: Create Virtual Environment

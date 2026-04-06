@@ -28,11 +28,11 @@ Thank you for your interest in contributing to JARVIS 2.0! This guide will help 
 
 ```bash
 # Fork the repository on GitHub first, then:
-git clone https://github.com/YOUR_USERNAME/jarvis-2.0.git
-cd jarvis-2.0
+git clone https://github.com/UdaySoni32/Jarvis-2.0.git
+cd Jarvis-2.0
 
 # Add upstream remote
-git remote add upstream https://github.com/ORIGINAL_OWNER/jarvis-2.0.git
+git remote add upstream https://github.com/UdaySoni32/Jarvis-2.0.git
 ```
 
 ---

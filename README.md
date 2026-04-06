@@ -38,8 +38,8 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/jarvis-2.0.git
-cd jarvis-2.0
+git clone https://github.com/UdaySoni32/Jarvis-2.0.git
+cd Jarvis-2.0
 
 # 2. Create virtual environment
 python -m venv venv

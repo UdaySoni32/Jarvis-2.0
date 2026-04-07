@@ -459,6 +459,7 @@ Just type what you want naturally! Examples:
         from ..core.llm import llm_manager, Message
         from ..core.tools import tool_registry, tool_executor
         from ..core.config import settings
+        from ..core.memory import memory_manager
 
         try:
             # Show processing indicator

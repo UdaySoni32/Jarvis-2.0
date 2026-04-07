@@ -51,6 +51,16 @@ class REPL:
                 logger.info(f"Started memory session")
 
         logger.info("REPL initialized")
+        
+        # Initialize automation engine
+        try:
+            from ..core.automation import automation_engine
+            import asyncio
+            # Start in background
+            asyncio.create_task(automation_engine.start())
+            logger.info("Automation engine starting...")
+        except Exception as e:
+            logger.warning(f"Could not start automation engine: {e}")
 
     def print_welcome(self):
         """Print welcome message."""
@@ -107,9 +117,18 @@ Welcome! I'm JARVIS, your AI-powered personal assistant.
 - `knowledge` - List all stored knowledge
 - `knowledge search <query>` - Search knowledge base
 
-**Agent System (Phase 2.3 - NEW):**
+**Agent System (Phase 2.3):**
 - `agents` - List all available agents
 - `agent <task>` - Delegate task to appropriate agent
+
+**Automation System (Phase 2.4 - NEW):**
+- `automations` - List all automation rules
+- `automation template <name>` - Add rule from template
+- `automation remove <rule>` - Remove automation rule
+- `automation pause <rule>` - Pause automation rule
+- `automation resume <rule>` - Resume automation rule
+- `automation run <rule>` - Run automation rule manually
+- `automation history` - Show recent automation runs
 
 **Natural Language:**
 Just type what you want naturally! Examples:
@@ -389,8 +408,23 @@ Just type what you want naturally! Examples:
                     border_style="green"
                 ))
             return True
+
+        return False
+    
+    async def handle_async_commands(self, user_input: str) -> bool:
+        """
+        Handle async commands (agents and automation).
         
-        elif command.startswith("agent "):
+        Args:
+            user_input: User input string
+            
+        Returns:
+            True if command was handled, False otherwise
+        """
+        command = user_input.lower().strip()
+        
+        # Agent commands
+        if command.startswith("agent "):
             # Execute agent command
             task = user_input[6:].strip()  # Remove "agent "
             if not task:
@@ -439,6 +473,213 @@ Just type what you want naturally! Examples:
                 self.console.print(f"[red]Agent execution error: {e}[/red]")
             
             return True
+        
+        # Automation commands
+        return await self.handle_automation_commands(user_input)
+    
+    async def handle_automation_commands(self, user_input: str) -> bool:
+        """
+        Handle automation commands.
+        
+        Args:
+            user_input: User input string
+            
+        Returns:
+            True if command was handled, False otherwise
+        """
+        command = user_input.lower().strip()
+        
+        if command == "automations" or command == "automation list":
+            # List automation rules
+            from ..core.automation import automation_engine
+            
+            rules = automation_engine.list_rules()
+            if not rules:
+                self.console.print("\n[yellow]No automation rules configured[/yellow]\n")
+            else:
+                lines = ["## ⚡ Automation Rules", ""]
+                for rule in rules:
+                    status_color = "green" if rule.status.value == "active" else "yellow"
+                    lines.append(f"**{rule.name}** [{status_color}]{rule.status.value}[/{status_color}]")
+                    lines.append(f"  - {rule.description or 'No description'}")
+                    lines.append(f"  - Trigger: {rule.trigger.trigger_type.value}")
+                    if rule.trigger.schedule:
+                        schedule = rule.trigger.schedule
+                        if schedule.type.value == "daily" and schedule.time:
+                            lines.append(f"  - Schedule: Daily at {schedule.time}")
+                        elif schedule.type.value == "interval":
+                            interval = schedule.interval_minutes or schedule.interval_hours or schedule.interval_seconds
+                            unit = "minutes" if schedule.interval_minutes else ("hours" if schedule.interval_hours else "seconds")
+                            lines.append(f"  - Schedule: Every {interval} {unit}")
+                        elif schedule.type.value == "cron" and schedule.cron_expression:
+                            lines.append(f"  - Schedule: {schedule.cron_expression}")
+                    lines.append(f"  - Actions: {len(rule.actions)}")
+                    lines.append(f"  - Runs: {rule.run_count}")
+                    if rule.last_run:
+                        lines.append(f"  - Last run: {rule.last_run.strftime('%Y-%m-%d %H:%M')}")
+                    lines.append("")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title=f"Automation ({len(rules)} rules)",
+                    border_style="cyan"
+                ))
+            return True
+        
+        elif command.startswith("automation "):
+            # Automation management commands
+            parts = command.split()
+            if len(parts) < 2:
+                self.console.print("[yellow]Usage: automation <add|remove|pause|resume|run> [args][/yellow]")
+                return True
+            
+            subcommand = parts[1]
+            
+            if subcommand == "add":
+                self.console.print("[yellow]Use automation templates or rule builder[/yellow]")
+                self.console.print("Examples:")
+                self.console.print("  automation template daily_backup")
+                self.console.print("  automation template morning_briefing")
+                return True
+            
+            elif subcommand == "template" and len(parts) >= 3:
+                # Add rule from template
+                template_name = parts[2]
+                from ..core.automation import create_from_template, automation_engine
+                
+                try:
+                    rule = create_from_template(template_name)
+                    if rule:
+                        success = await automation_engine.add_rule(rule)
+                        if success:
+                            self.console.print(f"✅ [green]Added automation rule: {rule.name}[/green]")
+                        else:
+                            self.console.print(f"[red]Failed to add rule[/red]")
+                    else:
+                        self.console.print(f"[red]Template not found: {template_name}[/red]")
+                        self.console.print("Available templates: daily_backup, morning_briefing, high_cpu_alert, file_watcher")
+                except Exception as e:
+                    self.console.print(f"[red]Error adding template: {e}[/red]")
+                return True
+            
+            elif subcommand == "remove" and len(parts) >= 3:
+                rule_name = " ".join(parts[2:])
+                from ..core.automation import automation_engine
+                
+                # Find rule by name
+                rule = None
+                for r in automation_engine.list_rules():
+                    if r.name.lower() == rule_name.lower():
+                        rule = r
+                        break
+                
+                if rule:
+                    success = await automation_engine.remove_rule(rule.id)
+                    if success:
+                        self.console.print(f"✅ [green]Removed rule: {rule.name}[/green]")
+                    else:
+                        self.console.print(f"[red]Failed to remove rule[/red]")
+                else:
+                    self.console.print(f"[red]Rule not found: {rule_name}[/red]")
+                return True
+            
+            elif subcommand == "pause" and len(parts) >= 3:
+                rule_name = " ".join(parts[2:])
+                from ..core.automation import automation_engine
+                
+                rule = None
+                for r in automation_engine.list_rules():
+                    if r.name.lower() == rule_name.lower():
+                        rule = r
+                        break
+                
+                if rule:
+                    success = await automation_engine.pause_rule(rule.id)
+                    if success:
+                        self.console.print(f"⏸️ [yellow]Paused rule: {rule.name}[/yellow]")
+                    else:
+                        self.console.print(f"[red]Failed to pause rule[/red]")
+                else:
+                    self.console.print(f"[red]Rule not found: {rule_name}[/red]")
+                return True
+            
+            elif subcommand == "resume" and len(parts) >= 3:
+                rule_name = " ".join(parts[2:])
+                from ..core.automation import automation_engine
+                
+                rule = None
+                for r in automation_engine.list_rules():
+                    if r.name.lower() == rule_name.lower():
+                        rule = r
+                        break
+                
+                if rule:
+                    success = await automation_engine.resume_rule(rule.id)
+                    if success:
+                        self.console.print(f"▶️ [green]Resumed rule: {rule.name}[/green]")
+                    else:
+                        self.console.print(f"[red]Failed to resume rule[/red]")
+                else:
+                    self.console.print(f"[red]Rule not found: {rule_name}[/red]")
+                return True
+            
+            elif subcommand == "run" and len(parts) >= 3:
+                rule_name = " ".join(parts[2:])
+                from ..core.automation import automation_engine
+                
+                rule = None
+                for r in automation_engine.list_rules():
+                    if r.name.lower() == rule_name.lower():
+                        rule = r
+                        break
+                
+                if rule:
+                    self.console.print(f"\n⚡ [cyan]Running automation rule: {rule.name}[/cyan]\n")
+                    result = await automation_engine.execute_rule(rule.id)
+                    if result["success"]:
+                        run_info = result["run"]
+                        self.console.print(f"✅ [green]Completed[/green] - {run_info['actions_executed']} actions succeeded")
+                        if run_info['actions_failed'] > 0:
+                            self.console.print(f"⚠️ [yellow]{run_info['actions_failed']} actions failed[/yellow]")
+                    else:
+                        self.console.print(f"[red]❌ Execution failed: {result.get('error')}[/red]")
+                else:
+                    self.console.print(f"[red]Rule not found: {rule_name}[/red]")
+                return True
+            
+            else:
+                self.console.print("[yellow]Usage: automation <add|remove|pause|resume|run|template> [args][/yellow]")
+            
+            return True
+        
+        elif command == "automation history":
+            # Show recent automation runs
+            from ..core.automation import automation_engine
+            
+            runs = automation_engine.get_recent_runs(limit=10)
+            if not runs:
+                self.console.print("\n[yellow]No automation runs yet[/yellow]\n")
+            else:
+                lines = ["## 📊 Recent Automation Runs", ""]
+                for run in runs:
+                    status_icon = "✅" if run.status == "success" else ("⚠️" if run.status == "partial" else "❌")
+                    duration = ""
+                    if run.completed_at:
+                        delta = run.completed_at - run.started_at
+                        duration = f" ({delta.total_seconds():.1f}s)"
+                    
+                    lines.append(f"{status_icon} **{run.rule_name}** - {run.started_at.strftime('%Y-%m-%d %H:%M')}{duration}")
+                    lines.append(f"  Actions: {run.actions_executed} succeeded, {run.actions_failed} failed")
+                    if run.error:
+                        lines.append(f"  Error: {run.error}")
+                    lines.append("")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title=f"History ({len(runs)} runs)",
+                    border_style="blue"
+                ))
+            return True
 
         return False
 
@@ -453,6 +694,10 @@ Just type what you want naturally! Examples:
         if self.handle_builtin_command(user_input):
             if user_input.lower().strip() in ["exit", "quit", "q"]:
                 self.running = False
+            return
+        
+        # Check for async commands (agents and automation)
+        if await self.handle_async_commands(user_input):
             return
 
         # Import LLM manager and tools
@@ -595,6 +840,14 @@ Just type what you want naturally! Examples:
             except Exception as e:
                 logger.error(f"Error in REPL: {e}", exc_info=True)
                 self.console.print(f"\n[red]❌ Error:[/red] {e}\n")
+        
+        # Cleanup automation engine on exit
+        try:
+            from ..core.automation import automation_engine
+            await automation_engine.stop()
+            logger.info("Automation engine stopped")
+        except Exception as e:
+            logger.warning(f"Error stopping automation engine: {e}")
 
 
 async def main():

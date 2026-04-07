@@ -76,3 +76,4 @@ passlib[bcrypt]>=1.7.4
 # Vector database and semantic search (Phase 2)
 chromadb>=0.4.0
 sentence-transformers>=2.2.0
+apscheduler>=3.10.0

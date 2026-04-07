@@ -102,10 +102,14 @@ Welcome! I'm JARVIS, your AI-powered personal assistant.
 - `sessions` - List recent sessions
 - `exit` / `quit` - Exit JARVIS
 
-**Semantic Search (NEW in Phase 2):**
+**Semantic Search (Phase 2.1):**
 - `search <query>` - Search similar conversations
 - `knowledge` - List all stored knowledge
 - `knowledge search <query>` - Search knowledge base
+
+**Agent System (Phase 2.3 - NEW):**
+- `agents` - List all available agents
+- `agent <task>` - Delegate task to appropriate agent
 
 **Natural Language:**
 Just type what you want naturally! Examples:
@@ -356,6 +360,83 @@ Just type what you want naturally! Examples:
                     self.console.print(f"[red]Knowledge search error: {e}[/red]")
             else:
                 self.console.print("[yellow]Usage: knowledge [list|search <query>][/yellow]")
+            
+            return True
+        
+        elif command == "agents":
+            # List available agents
+            from ..core.agents import agent_coordinator
+            
+            agents = agent_coordinator.list_agents()
+            if not agents:
+                self.console.print("\n[yellow]No agents available[/yellow]\n")
+            else:
+                lines = ["## 🤖 Available Agents", ""]
+                for agent_info in agents:
+                    lines.append(f"**{agent_info['name']}**")
+                    lines.append(f"  - {agent_info['description']}")
+                    lines.append(f"  - Status: {agent_info['status']}")
+                    lines.append(f"  - Capabilities:")
+                    for cap in agent_info['capabilities'][:4]:
+                        lines.append(f"    • {cap}")
+                    if len(agent_info['capabilities']) > 4:
+                        lines.append(f"    • ...and {len(agent_info['capabilities']) - 4} more")
+                    lines.append("")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title=f"Agents ({len(agents)} available)",
+                    border_style="green"
+                ))
+            return True
+        
+        elif command.startswith("agent "):
+            # Execute agent command
+            task = user_input[6:].strip()  # Remove "agent "
+            if not task:
+                self.console.print("[yellow]Usage: agent <task description>[/yellow]")
+                return True
+            
+            import asyncio
+            from ..core.agents import agent_coordinator
+            
+            self.console.print(f"\n🤖 [cyan]Delegating to agent:[/cyan] {task}\n")
+            
+            try:
+                result = await agent_coordinator.delegate_task(task)
+                
+                if result.get("success"):
+                    agent_name = result.get("agent", "Unknown")
+                    self.console.print(f"✅ [green]Completed by {agent_name}[/green]\n")
+                    
+                    # Display result based on type
+                    if "plan" in result:
+                        plan = result["plan"]
+                        lines = ["## 📋 Plan", ""]
+                        for step in plan.get("steps", []):
+                            lines.append(f"{step['number']}. {step['description']}")
+                        self.console.print(Panel(Markdown("\n".join(lines)), border_style="blue"))
+                    
+                    elif "findings" in result:
+                        findings = result["findings"]
+                        lines = ["## 🔍 Research Findings", ""]
+                        if "overview" in findings:
+                            lines.append(findings["overview"])
+                        self.console.print(Panel(Markdown("\n".join(lines)), border_style="purple"))
+                    
+                    elif "result" in result:
+                        res = result["result"]
+                        if "code" in res:
+                            lines = ["## 💻 Generated Code", "", f"```{res.get('language', 'python')}", res["code"], "```"]
+                            self.console.print(Panel(Markdown("\n".join(lines)), border_style="green"))
+                        else:
+                            self.console.print(Panel(str(res), border_style="cyan"))
+                else:
+                    error = result.get("error", "Unknown error")
+                    self.console.print(f"[red]❌ Agent error: {error}[/red]")
+            
+            except Exception as e:
+                self.console.print(f"[red]Agent execution error: {e}[/red]")
             
             return True
 

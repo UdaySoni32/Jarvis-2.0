@@ -17,6 +17,7 @@ from .email_integration import EmailIntegrationTool
 from .calendar_integration import CalendarIntegrationTool
 from .database_integration import DatabaseIntegrationTool
 from .github_integration import GitHubIntegrationTool
+from .docker_integration import DockerIntegrationTool
 
 
 def register_all_plugins():
@@ -39,6 +40,7 @@ def register_all_plugins():
         CalendarIntegrationTool(),
         DatabaseIntegrationTool(),
         GitHubIntegrationTool(),
+        DockerIntegrationTool(),
     ]
 
     for plugin in plugins:

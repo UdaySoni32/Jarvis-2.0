@@ -49,6 +49,9 @@ class REPL:
                 memory_manager.start_session(title="CLI Session")
                 self.memory_manager = memory_manager
                 logger.info(f"Started memory session")
+        else:
+            # Memory disabled, set to None
+            self.memory_manager = None
 
         logger.info("REPL initialized")
         
@@ -1074,6 +1077,11 @@ Just type what you want naturally! Examples:
         Args:
             user_input: User's input text
         """
+        # Import LLM manager and tools
+        from ..core.llm import llm_manager, Message
+        from ..core.tools import tool_registry, tool_executor
+        from ..core.config import settings
+        
         # Track command start time for analytics
         import time
         start_time = time.time()
@@ -1091,22 +1099,16 @@ Just type what you want naturally! Examples:
             if await self.handle_async_commands(user_input):
                 return
 
-        # Import LLM manager and tools
-        from ..core.llm import llm_manager, Message
-        from ..core.tools import tool_registry, tool_executor
-        from ..core.config import settings
-
-        try:
             # Show processing indicator
             self.console.print("\n[cyan]🤖 Thinking...[/cyan]", end="")
 
             # Add user message to memory
             if settings.enable_memory:
-                memory_manager.add_message("user", user_input)
+                self.memory_manager.add_message("user", user_input)
 
             # Get context messages from memory
             if settings.enable_memory:
-                context_messages = memory_manager.get_context_messages()
+                context_messages = self.memory_manager.get_context_messages()
                 messages = [
                     Message("system", "You are JARVIS, a helpful AI assistant. Be concise but friendly. You have access to tools to help users.")
                 ] + [Message(msg["role"], msg["content"]) for msg in context_messages]
@@ -1147,8 +1149,8 @@ Just type what you want naturally! Examples:
 
                         # Add tool interaction to memory
                         if settings.enable_memory:
-                            memory_manager.add_message("assistant", f"[Using tool: {tool_name}]")
-                            memory_manager.add_message("function", tool_executor.format_result_for_llm(tool_result))
+                            self.memory_manager.add_message("assistant", f"[Using tool: {tool_name}]")
+                            self.memory_manager.add_message("function", tool_executor.format_result_for_llm(tool_result))
 
                         # Add tool result to messages
                         messages.append(Message("assistant", f"[Calling {tool_name}]"))
@@ -1166,7 +1168,7 @@ Just type what you want naturally! Examples:
                     
                     # Save assistant response to memory
                     if settings.enable_memory:
-                        memory_manager.add_message("assistant", "".join(response_text))
+                        self.memory_manager.add_message("assistant", "".join(response_text))
 
                 elif response.get("content"):
                     # Direct response without tools
@@ -1174,7 +1176,7 @@ Just type what you want naturally! Examples:
                     
                     # Save to memory
                     if settings.enable_memory:
-                        memory_manager.add_message("assistant", response["content"])
+                        self.memory_manager.add_message("assistant", response["content"])
 
             else:
                 # No tools, just regular chat
@@ -1190,7 +1192,7 @@ Just type what you want naturally! Examples:
                 
                 # Save assistant response to memory
                 if settings.enable_memory:
-                    memory_manager.add_message("assistant", "".join(response_text))
+                    self.memory_manager.add_message("assistant", "".join(response_text))
 
         except Exception as e:
             command_success = False

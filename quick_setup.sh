@@ -5,10 +5,14 @@ echo "🚀 JARVIS 2.0 Quick Setup"
 echo "=========================="
 echo ""
 
-# Check if in Jarvis-2.0 directory
+# Get script directory and cd to it
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Check if we're in the right directory
 if [ ! -f "main.py" ]; then
-    echo "❌ Error: Please run this script from the Jarvis-2.0 directory"
-    echo "   Or run: git clone https://github.com/UdaySoni32/Jarvis-2.0.git && cd Jarvis-2.0"
+    echo "❌ Error: Cannot find main.py in the project directory"
+    echo "   Please make sure you're in the Jarvis-2.0 directory"
     exit 1
 fi
 

@@ -5,10 +5,18 @@
 ### Option 1: Automated Setup (Recommended)
 
 ```bash
-# Clone and setup in one go
+# Step 1: Clone repository
 git clone https://github.com/UdaySoni32/Jarvis-2.0.git
+
+# Step 2: Enter directory
 cd Jarvis-2.0
+
+# Step 3: Run automated setup
 bash quick_setup.sh
+
+# Step 4: Activate environment and test
+source venv/bin/activate
+python -m pytest tests/ -v
 ```
 
 ### Option 2: Manual Setup

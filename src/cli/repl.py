@@ -61,6 +61,41 @@ class REPL:
             logger.info("Automation engine starting...")
         except Exception as e:
             logger.warning(f"Could not start automation engine: {e}")
+        
+        # Initialize learning system
+        try:
+            from ..core.learning.storage import LearningStorage
+            from ..core.learning.tracker import PreferenceTracker
+            from ..core.learning.analytics import AnalyticsEngine
+            from ..core.learning.detector import BehaviorDetector
+            from ..core.learning.engine import PersonalizationEngine
+            from ..core.learning.adapter import AdaptiveResponseGenerator
+            
+            # Initialize storage backend
+            storage_path = settings.user_data_dir / "learning.db"
+            self.learning_storage = LearningStorage("sqlite", db_path=str(storage_path))
+            asyncio.create_task(self.learning_storage.initialize())
+            
+            # Initialize learning components with storage
+            self.preference_tracker = PreferenceTracker(self.learning_storage)
+            self.analytics_engine = AnalyticsEngine(self.learning_storage)
+            self.behavior_detector = BehaviorDetector(self.learning_storage)
+            self.personalization_engine = PersonalizationEngine(self.learning_storage)
+            self.adaptive_response_generator = AdaptiveResponseGenerator(self.personalization_engine)
+            
+            # Start session tracking
+            self.current_session = None
+            self.user_id = "default_user"  # In production, would be from auth
+            
+            logger.info("Learning system initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize learning system: {e}")
+            self.learning_storage = None
+            self.preference_tracker = None
+            self.analytics_engine = None
+            self.behavior_detector = None
+            self.personalization_engine = None
+            self.adaptive_response_generator = None
 
     def print_welcome(self):
         """Print welcome message."""
@@ -121,7 +156,7 @@ Welcome! I'm JARVIS, your AI-powered personal assistant.
 - `agents` - List all available agents
 - `agent <task>` - Delegate task to appropriate agent
 
-**Automation System (Phase 2.4 - NEW):**
+**Automation System (Phase 2.4):**
 - `automations` - List all automation rules
 - `automation template <name>` - Add rule from template
 - `automation remove <rule>` - Remove automation rule
@@ -129,6 +164,16 @@ Welcome! I'm JARVIS, your AI-powered personal assistant.
 - `automation resume <rule>` - Resume automation rule
 - `automation run <rule>` - Run automation rule manually
 - `automation history` - Show recent automation runs
+
+**Learning System (Phase 2.5 - NEW):**
+- `preferences` - Show user preferences and settings
+- `set preference <category>.<key> <value>` - Update preference
+- `analytics` - Show usage analytics and metrics
+- `insights` - Show command usage insights
+- `patterns` - Show detected behavior patterns
+- `suggestions` - Show personalized suggestions
+- `learning status` - Show learning system status
+- `learning enable/disable/reset` - Control learning system
 
 **Natural Language:**
 Just type what you want naturally! Examples:
@@ -475,7 +520,346 @@ Just type what you want naturally! Examples:
             return True
         
         # Automation commands
-        return await self.handle_automation_commands(user_input)
+        if await self.handle_automation_commands(user_input):
+            return True
+        
+        # Learning system commands
+        if await self.handle_learning_commands(user_input):
+            return True
+        
+        return False
+    
+    async def handle_learning_commands(self, user_input: str) -> bool:
+        """
+        Handle learning system commands.
+        
+        Args:
+            user_input: User input string
+            
+        Returns:
+            True if command was handled, False otherwise
+        """
+        command = user_input.lower().strip()
+        
+        if not self.learning_storage:
+            if any(cmd in command for cmd in ["preferences", "learning", "analytics", "patterns"]):
+                self.console.print("[yellow]Learning system not available[/yellow]")
+                return True
+            return False
+        
+        # Preferences commands
+        if command == "preferences" or command == "prefs":
+            # Show user preferences
+            try:
+                profile = await self.personalization_engine.get_user_profile(self.user_id)
+                prefs_summary = self.preference_tracker.get_preference_summary(self.user_id)
+                
+                lines = ["## 👤 User Preferences", ""]
+                
+                # Response style
+                lines.append("### Response Style")
+                style = prefs_summary["response_style"]
+                lines.append(f"• **Tone**: {style['tone']}")
+                lines.append(f"• **Verbosity**: {style['verbosity']}")
+                lines.append(f"• **Technical Level**: {style['technical_level']}/5")
+                lines.append(f"• **Include Explanations**: {style['include_explanations']}")
+                lines.append(f"• **Use Emojis**: {style['use_emojis']}")
+                lines.append("")
+                
+                # Tool preferences
+                lines.append("### Tool Preferences")
+                tools = prefs_summary["tool_preferences"]
+                lines.append(f"• **Preferred LLM**: {tools['preferred_llm_model']}")
+                lines.append(f"• **Automation Enabled**: {tools['automation_enabled']}")
+                lines.append(f"• **Suggestion Frequency**: {tools['suggestion_frequency']}/5")
+                lines.append("")
+                
+                # Time preferences
+                lines.append("### Time Preferences")
+                time_prefs = prefs_summary["time_preferences"]
+                lines.append(f"• **Timezone**: {time_prefs['timezone']}")
+                lines.append(f"• **Active Hours**: {time_prefs['active_hours']}")
+                lines.append(f"• **Weekend Mode**: {time_prefs['weekend_mode']}")
+                lines.append("")
+                
+                # Privacy settings
+                lines.append("### Privacy Settings")
+                privacy = prefs_summary["privacy_settings"]
+                lines.append(f"• **Collect Usage Data**: {privacy['collect_usage_data']}")
+                lines.append(f"• **Data Retention**: {privacy['data_retention_days']} days")
+                lines.append("")
+                
+                lines.append(f"**Last Updated**: {prefs_summary['last_updated']}")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title="User Preferences",
+                    border_style="blue"
+                ))
+            except Exception as e:
+                self.console.print(f"[red]Error loading preferences: {e}[/red]")
+            
+            return True
+        
+        elif command.startswith("set preference ") or command.startswith("set pref "):
+            # Set a preference
+            # Format: set preference <category>.<key> <value>
+            parts = user_input.split(maxsplit=3)
+            if len(parts) < 4:
+                self.console.print("[yellow]Usage: set preference <category>.<key> <value>[/yellow]")
+                self.console.print("[dim]Example: set preference response_style.tone casual[/dim]")
+                return True
+            
+            try:
+                pref_path = parts[2]
+                value = parts[3]
+                
+                if "." not in pref_path:
+                    self.console.print("[red]Invalid preference path. Use format: category.key[/red]")
+                    return True
+                
+                category, key = pref_path.split(".", 1)
+                
+                # Convert value to appropriate type
+                if value.lower() in ["true", "false"]:
+                    value = value.lower() == "true"
+                elif value.isdigit():
+                    value = int(value)
+                
+                self.preference_tracker.set_explicit_preference(
+                    self.user_id, category, key, value
+                )
+                
+                self.console.print(f"✅ [green]Set {category}.{key} = {value}[/green]")
+            except Exception as e:
+                self.console.print(f"[red]Error setting preference: {e}[/red]")
+            
+            return True
+        
+        # Analytics commands
+        elif command == "analytics" or command == "stats":
+            # Show usage analytics
+            try:
+                metrics = await self.analytics_engine.get_user_metrics(self.user_id, days=30)
+                
+                lines = ["## 📊 Usage Analytics (Last 30 Days)", ""]
+                lines.append(f"• **Total Commands**: {metrics.total_commands}")
+                lines.append(f"• **Total Sessions**: {metrics.total_sessions}")
+                lines.append(f"• **Average Session Duration**: {metrics.avg_session_duration:.1f} minutes")
+                lines.append(f"• **Success Rate**: {metrics.success_rate:.1%}")
+                lines.append(f"• **Average Response Time**: {metrics.avg_response_time:.0f}ms")
+                lines.append(f"• **Peak Usage Hour**: {metrics.peak_usage_hour:02d}:00")
+                lines.append(f"• **Most Used Command**: {metrics.most_used_command}")
+                lines.append(f"• **Most Used Category**: {metrics.most_used_category.value}")
+                lines.append(f"• **Command Diversity**: {metrics.command_diversity:.1%}")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title="Usage Analytics",
+                    border_style="cyan"
+                ))
+            except Exception as e:
+                self.console.print(f"[red]Error loading analytics: {e}[/red]")
+            
+            return True
+        
+        elif command == "insights" or command == "command insights":
+            # Show command insights
+            try:
+                insights = await self.analytics_engine.get_command_insights(self.user_id, days=30)
+                
+                if not insights:
+                    self.console.print("[yellow]No command insights available yet[/yellow]")
+                    return True
+                
+                lines = ["## 💡 Command Insights", ""]
+                
+                for insight in insights[:5]:  # Top 5 commands
+                    lines.append(f"### {insight.command}")
+                    lines.append(f"• **Usage Count**: {insight.usage_count}")
+                    lines.append(f"• **Success Rate**: {insight.success_rate:.1%}")
+                    lines.append(f"• **Avg Execution Time**: {insight.avg_execution_time:.0f}ms")
+                    
+                    if insight.usage_contexts:
+                        contexts = ", ".join([ctx.value for ctx in insight.usage_contexts])
+                        lines.append(f"• **Primary Contexts**: {contexts}")
+                    
+                    if insight.recommendation:
+                        lines.append(f"• **Recommendation**: {insight.recommendation}")
+                    
+                    lines.append("")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title="Command Insights",
+                    border_style="purple"
+                ))
+            except Exception as e:
+                self.console.print(f"[red]Error loading insights: {e}[/red]")
+            
+            return True
+        
+        # Behavior patterns commands
+        elif command == "patterns" or command == "behavior patterns":
+            # Show detected behavior patterns
+            try:
+                patterns = await self.behavior_detector.detect_user_patterns(self.user_id)
+                
+                if not patterns:
+                    self.console.print("[yellow]No behavior patterns detected yet[/yellow]")
+                    return True
+                
+                lines = ["## 🧠 Behavior Patterns", ""]
+                
+                for pattern in patterns[:8]:  # Top 8 patterns
+                    lines.append(f"### {pattern.pattern_name}")
+                    lines.append(f"• **Type**: {pattern.pattern_type.value}")
+                    lines.append(f"• **Description**: {pattern.description}")
+                    lines.append(f"• **Confidence**: {pattern.confidence_score:.1%}")
+                    lines.append(f"• **Strength**: {pattern.strength:.1%}")
+                    lines.append(f"• **Observations**: {pattern.observation_count}")
+                    
+                    if pattern.examples:
+                        lines.append(f"• **Examples**: {', '.join(pattern.examples[:2])}")
+                    
+                    lines.append("")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title="Behavior Patterns",
+                    border_style="magenta"
+                ))
+            except Exception as e:
+                self.console.print(f"[red]Error loading patterns: {e}[/red]")
+            
+            return True
+        
+        elif command == "suggestions":
+            # Show personalized suggestions
+            try:
+                profile = await self.personalization_engine.get_user_profile(self.user_id)
+                suggestions = await self.personalization_engine.get_personalized_suggestions(self.user_id)
+                
+                if not suggestions:
+                    self.console.print("[yellow]No suggestions available at the moment[/yellow]")
+                    return True
+                
+                lines = ["## 💡 Personalized Suggestions", ""]
+                
+                for i, suggestion in enumerate(suggestions, 1):
+                    priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(suggestion["priority"], "⚪")
+                    lines.append(f"### {i}. {suggestion['title']} {priority_emoji}")
+                    lines.append(f"**Type**: {suggestion['type']}")
+                    lines.append(f"**Description**: {suggestion['description']}")
+                    
+                    if suggestion.get("benefits"):
+                        benefits = ", ".join(suggestion["benefits"])
+                        lines.append(f"**Benefits**: {benefits}")
+                    
+                    lines.append("")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title="Personalized Suggestions",
+                    border_style="yellow"
+                ))
+            except Exception as e:
+                self.console.print(f"[red]Error loading suggestions: {e}[/red]")
+            
+            return True
+        
+        elif command == "learning status":
+            # Show learning system status
+            try:
+                if self.personalization_engine:
+                    personalization_stats = self.personalization_engine.get_personalization_stats()
+                else:
+                    personalization_stats = {}
+                
+                if self.behavior_detector:
+                    detection_stats = self.behavior_detector.get_detection_stats()
+                else:
+                    detection_stats = {}
+                
+                if self.learning_storage:
+                    storage_stats = await self.learning_storage.get_storage_stats()
+                else:
+                    storage_stats = {}
+                
+                lines = ["## 🧠 Learning System Status", ""]
+                
+                # Personalization status
+                lines.append("### Personalization Engine")
+                lines.append(f"• **Enabled**: {personalization_stats.get('personalization_enabled', False)}")
+                lines.append(f"• **Learning Enabled**: {personalization_stats.get('learning_enabled', False)}")
+                lines.append(f"• **Cached Profiles**: {personalization_stats.get('cached_profiles', 0)}")
+                lines.append("")
+                
+                # Behavior detection
+                lines.append("### Behavior Detection")
+                lines.append(f"• **Total Users**: {detection_stats.get('total_users', 0)}")
+                lines.append(f"• **Total Patterns**: {detection_stats.get('total_patterns', 0)}")
+                lines.append(f"• **Avg Patterns/User**: {detection_stats.get('avg_patterns_per_user', 0):.1f}")
+                lines.append("")
+                
+                # Storage statistics
+                lines.append("### Storage")
+                lines.append(f"• **Storage Type**: {storage_stats.get('storage_type', 'unknown')}")
+                lines.append(f"• **Auto Cleanup**: {storage_stats.get('auto_cleanup_enabled', False)}")
+                lines.append(f"• **Database Size**: {storage_stats.get('database_size_mb', 0):.2f} MB")
+                lines.append(f"• **User Profiles**: {storage_stats.get('user_profiles_count', 0)}")
+                lines.append(f"• **Command Usage Records**: {storage_stats.get('command_usage_count', 0)}")
+                lines.append(f"• **Behavior Patterns**: {storage_stats.get('behavior_patterns_count', 0)}")
+                
+                self.console.print(Panel(
+                    Markdown("\n".join(lines)),
+                    title="Learning System Status",
+                    border_style="green"
+                ))
+            except Exception as e:
+                self.console.print(f"[red]Error loading learning status: {e}[/red]")
+            
+            return True
+        
+        elif command.startswith("learning "):
+            # Learning system control commands
+            subcommand = command[9:].strip()
+            
+            if subcommand == "enable":
+                if self.personalization_engine:
+                    self.personalization_engine.enable_personalization()
+                    self.personalization_engine.enable_learning()
+                self.console.print("✅ [green]Learning system enabled[/green]")
+            
+            elif subcommand == "disable":
+                if self.personalization_engine:
+                    self.personalization_engine.disable_personalization()
+                    self.personalization_engine.disable_learning()
+                self.console.print("⚠️ [yellow]Learning system disabled[/yellow]")
+            
+            elif subcommand == "reset":
+                # Reset user data (with confirmation)
+                self.console.print("[yellow]⚠️ This will delete all learning data for your user.[/yellow]")
+                confirm = input("Type 'RESET' to confirm: ")
+                if confirm == "RESET":
+                    try:
+                        if self.personalization_engine:
+                            self.personalization_engine.clear_user_cache(self.user_id)
+                        if self.learning_storage:
+                            await self.learning_storage.cleanup_expired_data(self.user_id)
+                        self.console.print("✅ [green]Learning data reset[/green]")
+                    except Exception as e:
+                        self.console.print(f"[red]Error resetting data: {e}[/red]")
+                else:
+                    self.console.print("Reset cancelled")
+            
+            else:
+                self.console.print(f"[yellow]Unknown learning command: {subcommand}[/yellow]")
+                self.console.print("[dim]Available: enable, disable, reset[/dim]")
+            
+            return True
+        
+        return False
     
     async def handle_automation_commands(self, user_input: str) -> bool:
         """
@@ -690,15 +1074,22 @@ Just type what you want naturally! Examples:
         Args:
             user_input: User's input text
         """
-        # Check for built-in commands
-        if self.handle_builtin_command(user_input):
-            if user_input.lower().strip() in ["exit", "quit", "q"]:
-                self.running = False
-            return
+        # Track command start time for analytics
+        import time
+        start_time = time.time()
+        command_success = True
+        error_message = None
         
-        # Check for async commands (agents and automation)
-        if await self.handle_async_commands(user_input):
-            return
+        try:
+            # Check for built-in commands
+            if self.handle_builtin_command(user_input):
+                if user_input.lower().strip() in ["exit", "quit", "q"]:
+                    self.running = False
+                return
+            
+            # Check for async commands (agents and automation)
+            if await self.handle_async_commands(user_input):
+                return
 
         # Import LLM manager and tools
         from ..core.llm import llm_manager, Message
@@ -802,15 +1193,89 @@ Just type what you want naturally! Examples:
                     memory_manager.add_message("assistant", "".join(response_text))
 
         except Exception as e:
+            command_success = False
+            error_message = str(e)
             logger.error(f"Error processing input: {e}", exc_info=True)
             self.console.print(f"\n[red]❌ Error:[/red] {e}\n")
             self.console.print(
                 "[dim]Tip: Check your API key or try 'status' to see configuration[/dim]\n"
             )
+        
+        finally:
+            # Track command usage for learning
+            if self.analytics_engine and self.preference_tracker:
+                try:
+                    execution_time_ms = (time.time() - start_time) * 1000
+                    
+                    # Create command usage record
+                    from ..core.learning.schemas import CommandUsage, CommandCategory, UsageContext
+                    import uuid
+                    
+                    # Determine command category
+                    command_lower = user_input.lower().strip()
+                    if any(cmd in command_lower for cmd in ["agent", "delegate"]):
+                        category = CommandCategory.AGENT
+                    elif any(cmd in command_lower for cmd in ["automation", "schedule"]):
+                        category = CommandCategory.AUTOMATION
+                    elif any(cmd in command_lower for cmd in ["tool", "use"]):
+                        category = CommandCategory.TOOL
+                    elif any(cmd in command_lower for cmd in ["help", "status", "info"]):
+                        category = CommandCategory.HELP
+                    elif any(cmd in command_lower for cmd in ["search", "find", "query"]):
+                        category = CommandCategory.SEARCH
+                    elif any(cmd in command_lower for cmd in ["create", "file", "write", "save"]):
+                        category = CommandCategory.FILE
+                    else:
+                        category = CommandCategory.SYSTEM
+                    
+                    # Create usage record
+                    command_usage = CommandUsage(
+                        user_id=self.user_id,
+                        session_id=getattr(self, 'current_session_id', 'default_session'),
+                        command=user_input[:100],  # Truncate long commands
+                        category=category,
+                        arguments={"length": len(user_input)},
+                        success=command_success,
+                        execution_time_ms=execution_time_ms,
+                        error_message=error_message,
+                        context=UsageContext.PERSONAL  # Default context
+                    )
+                    
+                    # Track command usage (run in background to avoid blocking)
+                    import asyncio
+                    asyncio.create_task(self.preference_tracker.track_command_usage(self.user_id, command_usage))
+                    asyncio.create_task(self.analytics_engine.record_command_usage(command_usage))
+                    
+                    # Record interaction for personalization
+                    asyncio.create_task(self.personalization_engine.record_user_interaction(
+                        self.user_id, user_input[:50], command_success, user_input
+                    ))
+                    
+                except Exception as e:
+                    logger.debug(f"Could not track command usage: {e}")
+    
 
     async def run(self):
         """Run the REPL loop."""
         self.running = True
+        
+        # Start learning session tracking
+        if self.analytics_engine and self.learning_storage:
+            try:
+                from ..core.learning.schemas import UsageSession
+                import uuid
+                
+                self.current_session_id = str(uuid.uuid4())
+                session = UsageSession(
+                    session_id=self.current_session_id,
+                    user_id=self.user_id
+                )
+                await self.analytics_engine.start_session(session)
+                logger.debug(f"Started learning session: {self.current_session_id}")
+            except Exception as e:
+                logger.debug(f"Could not start learning session: {e}")
+                self.current_session_id = "default_session"
+        
         self.print_welcome()
 
         while self.running:
@@ -840,6 +1305,14 @@ Just type what you want naturally! Examples:
             except Exception as e:
                 logger.error(f"Error in REPL: {e}", exc_info=True)
                 self.console.print(f"\n[red]❌ Error:[/red] {e}\n")
+        
+        # Cleanup learning session on exit
+        if self.analytics_engine and hasattr(self, 'current_session_id'):
+            try:
+                await self.analytics_engine.end_session(self.current_session_id)
+                logger.debug("Learning session ended")
+            except Exception as e:
+                logger.debug(f"Error ending learning session: {e}")
         
         # Cleanup automation engine on exit
         try:

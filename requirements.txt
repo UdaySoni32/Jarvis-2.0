@@ -77,3 +77,6 @@ passlib[bcrypt]>=1.7.4
 chromadb>=0.4.0
 sentence-transformers>=2.2.0
 apscheduler>=3.10.0
+aiosqlite>=1.4.0
+cryptography>=3.4.8
+numpy>=1.21.0

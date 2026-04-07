@@ -80,3 +80,10 @@ apscheduler>=3.10.0
 aiosqlite>=1.4.0
 cryptography>=3.4.8
 numpy>=1.21.0
+
+# Advanced Plugins (Phase 2.6)
+# Email Integration
+google-auth>=2.27.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.115.0
+exchangelib>=5.1.0

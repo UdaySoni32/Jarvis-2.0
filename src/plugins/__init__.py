@@ -1,7 +1,7 @@
 """Plugin initialization and registration."""
 
-from core.tools.registry import tool_registry
-from core.logger import logger
+from src.core.tools.registry import tool_registry
+from src.core.logger import logger
 
 # Import tools
 from .calculator import CalculatorTool
@@ -13,6 +13,7 @@ from .weather import WeatherTool
 from .timer import TimerTool
 from .notes import NotesTool
 from .process_manager import ProcessManagerTool
+from .email_integration import EmailIntegrationTool
 
 
 def register_all_plugins():
@@ -30,6 +31,8 @@ def register_all_plugins():
         TimerTool(),
         NotesTool(),
         ProcessManagerTool(),
+        # Advanced plugins (Phase 2.6)
+        EmailIntegrationTool(),
     ]
 
     for plugin in plugins:

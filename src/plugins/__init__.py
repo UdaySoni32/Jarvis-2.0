@@ -19,6 +19,7 @@ from .database_integration import DatabaseIntegrationTool
 from .github_integration import GitHubIntegrationTool
 from .docker_integration import DockerIntegrationTool
 from .clipboard_manager import ClipboardManagerTool
+from .api_testing import APITestingTool
 
 
 def register_all_plugins():
@@ -43,6 +44,7 @@ def register_all_plugins():
         GitHubIntegrationTool(),
         DockerIntegrationTool(),
         ClipboardManagerTool(),
+        APITestingTool(),
     ]
 
     for plugin in plugins:

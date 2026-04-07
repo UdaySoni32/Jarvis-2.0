@@ -37,9 +37,18 @@ class REPL:
 
         # Start memory session if enabled
         if settings.enable_memory:
-            from ..core.memory import memory_manager
-            memory_manager.start_session(title="CLI Session")
-            logger.info(f"Started memory session")
+            try:
+                # Try to use semantic memory if available
+                from ..core.memory.semantic import semantic_memory
+                semantic_memory.start_session(title="CLI Session")
+                self.memory_manager = semantic_memory
+                logger.info(f"Started semantic memory session")
+            except:
+                # Fall back to regular memory
+                from ..core.memory import memory_manager
+                memory_manager.start_session(title="CLI Session")
+                self.memory_manager = memory_manager
+                logger.info(f"Started memory session")
 
         logger.info("REPL initialized")
 
@@ -88,8 +97,15 @@ Welcome! I'm JARVIS, your AI-powered personal assistant.
 - `help` - Show this help message
 - `status` - Show system status
 - `clear` - Clear screen
-- `history` - Show command history
+- `tools` - List available tools
+- `memory` - Show current session info
+- `sessions` - List recent sessions
 - `exit` / `quit` - Exit JARVIS
+
+**Semantic Search (NEW in Phase 2):**
+- `search <query>` - Search similar conversations
+- `knowledge` - List all stored knowledge
+- `knowledge search <query>` - Search knowledge base
 
 **Natural Language:**
 Just type what you want naturally! Examples:
@@ -226,6 +242,121 @@ Just type what you want naturally! Examples:
         elif command == "history":
             # TODO: Implement history viewing
             self.console.print("[yellow]Command history feature coming soon![/yellow]")
+            return True
+        
+        elif command.startswith("search "):
+            # Semantic search command
+            query = user_input[7:].strip()  # Remove "search "
+            if not query:
+                self.console.print("[yellow]Usage: search <query>[/yellow]")
+                return True
+            
+            try:
+                from ..core.memory.semantic import semantic_memory
+                
+                if not semantic_memory.semantic_enabled:
+                    self.console.print("[yellow]⚠️  Semantic search not available[/yellow]")
+                    return True
+                
+                results = semantic_memory.search_similar(query, n_results=5)
+                
+                if not results:
+                    self.console.print(f"\n[yellow]No results found for: {query}[/yellow]\n")
+                else:
+                    lines = [f"## 🔍 Search Results for: {query}", ""]
+                    for i, result in enumerate(results, 1):
+                        role = result['metadata']['role']
+                        content = result['content']
+                        # Truncate long messages
+                        if len(content) > 100:
+                            content = content[:97] + "..."
+                        
+                        lines.append(f"**{i}.** [{role}] {content}")
+                    
+                    self.console.print(Panel(
+                        Markdown("\n".join(lines)),
+                        title=f"Found {len(results)} similar messages",
+                        border_style="green"
+                    ))
+            except Exception as e:
+                self.console.print(f"[red]Search error: {e}[/red]")
+            
+            return True
+        
+        elif command.startswith("knowledge"):
+            # Knowledge base commands
+            parts = command.split(maxsplit=1)
+            
+            if len(parts) == 1 or parts[1] == "list":
+                # List all knowledge
+                try:
+                    from ..core.memory.semantic import semantic_memory
+                    
+                    if not semantic_memory.semantic_enabled:
+                        self.console.print("[yellow]⚠️  Knowledge base not available[/yellow]")
+                        return True
+                    
+                    # Search for all knowledge
+                    knowledge = semantic_memory.search_knowledge("", n_results=20)
+                    
+                    if not knowledge:
+                        self.console.print("\n[yellow]No knowledge stored yet[/yellow]\n")
+                    else:
+                        lines = ["## 🧠 Knowledge Base", ""]
+                        for i, item in enumerate(knowledge, 1):
+                            content = item['content']
+                            category = item['metadata'].get('category', 'general')
+                            importance = item['metadata'].get('importance', 0.5)
+                            
+                            if len(content) > 80:
+                                content = content[:77] + "..."
+                            
+                            lines.append(f"**{i}.** [{category}] {content} (importance: {importance:.1f})")
+                        
+                        self.console.print(Panel(
+                            Markdown("\n".join(lines)),
+                            title=f"Knowledge ({len(knowledge)} items)",
+                            border_style="purple"
+                        ))
+                except Exception as e:
+                    self.console.print(f"[red]Knowledge error: {e}[/red]")
+            
+            elif parts[1].startswith("search "):
+                # Search knowledge
+                query = parts[1][7:].strip()
+                if not query:
+                    self.console.print("[yellow]Usage: knowledge search <query>[/yellow]")
+                    return True
+                
+                try:
+                    from ..core.memory.semantic import semantic_memory
+                    
+                    if not semantic_memory.semantic_enabled:
+                        self.console.print("[yellow]⚠️  Knowledge base not available[/yellow]")
+                        return True
+                    
+                    results = semantic_memory.search_knowledge(query, n_results=5)
+                    
+                    if not results:
+                        self.console.print(f"\n[yellow]No knowledge found for: {query}[/yellow]\n")
+                    else:
+                        lines = [f"## 🔎 Knowledge Search: {query}", ""]
+                        for i, item in enumerate(results, 1):
+                            content = item['content']
+                            category = item['metadata'].get('category', 'general')
+                            
+                            lines.append(f"**{i}.** [{category}] {content}")
+                        
+                        self.console.print(Panel(
+                            Markdown("\n".join(lines)),
+                            title=f"Found {len(results)} knowledge items",
+                            border_style="purple"
+                        ))
+                except Exception as e:
+                    self.console.print(f"[red]Knowledge search error: {e}[/red]")
+            else:
+                self.console.print("[yellow]Usage: knowledge [list|search <query>][/yellow]")
+            
             return True
 
         return False

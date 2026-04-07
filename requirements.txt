@@ -72,3 +72,7 @@ passlib[bcrypt]>=1.7.4
 # pytest>=8.0.0
 # pytest-asyncio>=0.23.4
 # pytest-cov>=4.1.0
+
+# Vector database and semantic search (Phase 2)
+chromadb>=0.4.0
+sentence-transformers>=2.2.0

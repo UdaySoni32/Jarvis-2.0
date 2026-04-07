@@ -8,6 +8,12 @@ from .base import BaseLLMProvider
 from .openai_provider import OpenAIProvider, OPENAI_AVAILABLE
 from .ollama_provider import OllamaProvider, HTTPX_AVAILABLE
 
+try:
+    from .claude_provider import ClaudeProvider, ANTHROPIC_AVAILABLE
+except ImportError:
+    ClaudeProvider = None
+    ANTHROPIC_AVAILABLE = False
+
 
 class LLMManager:
     """Manages LLM provider selection and initialization."""
@@ -56,10 +62,15 @@ class LLMManager:
                 self._provider = OllamaProvider()
 
             elif provider_name == "claude" or provider_name == "anthropic":
-                # TODO: Implement Claude provider
-                raise NotImplementedError(
-                    "Claude provider not yet implemented. Use OpenAI or Ollama for now."
-                )
+                if not ANTHROPIC_AVAILABLE:
+                    raise ImportError(
+                        "Claude not installed. Install with: pip install anthropic"
+                    )
+                if not settings.has_anthropic_key:
+                    raise ValueError(
+                        "Anthropic API key not configured. Set ANTHROPIC_API_KEY in .env"
+                    )
+                self._provider = ClaudeProvider()
 
             else:
                 raise ValueError(

@@ -1162,7 +1162,7 @@ Just type what you want naturally! Examples:
                     self.console.print("[bold cyan]JARVIS:[/bold cyan] ", end="")
                     response_text = []
                     async for chunk in llm_manager.stream_chat(messages, temperature=0.7):
-                        self.console.print(chunk, end="", flush=True)
+                        self.console.print(chunk, end="")
                         response_text.append(chunk)
                     self.console.print("\n")
                     
@@ -1185,7 +1185,7 @@ Just type what you want naturally! Examples:
 
                 response_text = []
                 async for chunk in llm_manager.stream_chat(messages, temperature=0.7):
-                    self.console.print(chunk, end="", flush=True)
+                    self.console.print(chunk, end="")
                     response_text.append(chunk)
 
                 self.console.print("\n")

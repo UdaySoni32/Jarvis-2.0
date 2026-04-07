@@ -77,7 +77,7 @@ passlib[bcrypt]>=1.7.4
 chromadb>=0.4.0
 sentence-transformers>=2.2.0
 apscheduler>=3.10.0
-aiosqlite>=1.4.0
+aiosqlite>=0.20.0
 cryptography>=3.4.8
 numpy>=1.21.0
 
@@ -96,7 +96,7 @@ asyncpg>=0.30.0
 psycopg2-binary>=2.9.9
 aiomysql>=0.2.0
 pymysql>=1.1.1
-aiosqlite>=1.4.0
+aiosqlite>=0.20.0
 motor>=4.0.0
 pymongo>=4.10.0
 sqlparse>=0.5.3

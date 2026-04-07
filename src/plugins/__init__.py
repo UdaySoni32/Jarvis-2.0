@@ -18,6 +18,7 @@ from .calendar_integration import CalendarIntegrationTool
 from .database_integration import DatabaseIntegrationTool
 from .github_integration import GitHubIntegrationTool
 from .docker_integration import DockerIntegrationTool
+from .clipboard_manager import ClipboardManagerTool
 
 
 def register_all_plugins():
@@ -41,6 +42,7 @@ def register_all_plugins():
         DatabaseIntegrationTool(),
         GitHubIntegrationTool(),
         DockerIntegrationTool(),
+        ClipboardManagerTool(),
     ]
 
     for plugin in plugins:

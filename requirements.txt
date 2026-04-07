@@ -35,11 +35,18 @@ rich>=13.7.0
 prompt-toolkit>=3.0.43
 colorama>=0.4.6
 
-# Voice
+# Voice Interface (Phase 3.1)
 openai-whisper>=20231117
 pyttsx3>=2.90
 SpeechRecognition>=3.10.1
-pyaudio>=0.2.14
+sounddevice>=0.4.6
+soundfile>=0.12.1
+webrtcvad>=2.0.10
+pvporcupine>=3.0.0
+numpy>=1.24.0
+gTTS>=2.5.0
+pygame>=2.5.0
+elevenlabs>=0.2.27
 
 # Utilities
 python-dotenv>=1.0.1

@@ -14,6 +14,7 @@ from .timer import TimerTool
 from .notes import NotesTool
 from .process_manager import ProcessManagerTool
 from .email_integration import EmailIntegrationTool
+from .calendar_integration import CalendarIntegrationTool
 
 
 def register_all_plugins():
@@ -33,6 +34,7 @@ def register_all_plugins():
         ProcessManagerTool(),
         # Advanced plugins (Phase 2.6)
         EmailIntegrationTool(),
+        CalendarIntegrationTool(),
     ]
 
     for plugin in plugins:

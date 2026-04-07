@@ -90,3 +90,13 @@ exchangelib>=5.1.0
 
 # Calendar Integration  
 icalendar>=6.0.1
+
+# Database Integration
+asyncpg>=0.30.0
+psycopg2-binary>=2.9.9
+aiomysql>=0.2.0
+pymysql>=1.1.1
+aiosqlite>=1.4.0
+motor>=4.0.0
+pymongo>=4.10.0
+sqlparse>=0.5.3

@@ -15,6 +15,7 @@ from .notes import NotesTool
 from .process_manager import ProcessManagerTool
 from .email_integration import EmailIntegrationTool
 from .calendar_integration import CalendarIntegrationTool
+from .database_integration import DatabaseIntegrationTool
 
 
 def register_all_plugins():
@@ -35,6 +36,7 @@ def register_all_plugins():
         # Advanced plugins (Phase 2.6)
         EmailIntegrationTool(),
         CalendarIntegrationTool(),
+        DatabaseIntegrationTool(),
     ]
 
     for plugin in plugins:

@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = Field(default=None, alias="ANTHROPIC_API_KEY")
     claude_model: str = Field(default="claude-3-opus-20240229", alias="CLAUDE_MODEL")
 
+    # Google Gemini Configuration
+    gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-1.5-pro", alias="GEMINI_MODEL")
+
     # Ollama Configuration
     ollama_model: str = Field(default="llama3", alias="OLLAMA_MODEL")
     ollama_base_url: str = Field(
@@ -102,6 +106,11 @@ class Settings(BaseSettings):
     def has_anthropic_key(self) -> bool:
         """Check if Anthropic API key is configured."""
         return bool(self.anthropic_api_key)
+
+    @property
+    def has_gemini_key(self) -> bool:
+        """Check if Gemini API key is configured."""
+        return bool(self.gemini_api_key)
 
     @property
     def can_use_cloud_llm(self) -> bool:

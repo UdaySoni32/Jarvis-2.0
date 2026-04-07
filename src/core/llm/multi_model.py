@@ -1,13 +1,26 @@
 """Multi-model support for JARVIS 2.0."""
 
-from typing import Optional, List, AsyncGenerator
+from typing import Optional, List, AsyncGenerator, Callable, Dict, Any
 from dataclasses import dataclass
 from ..logger import logger
 
 from .base import BaseLLMProvider, Message
 from .openai_provider import OpenAIProvider, OPENAI_AVAILABLE
 from .ollama_provider import OllamaProvider, HTTPX_AVAILABLE
-from .claude_provider import ClaudeProvider, ANTHROPIC_AVAILABLE
+
+try:
+    from .claude_provider import ClaudeProvider, ANTHROPIC_AVAILABLE
+except ImportError:
+    ClaudeProvider = None
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    from .gemini_provider import GeminiProvider, GEMINI_AVAILABLE
+except ImportError:
+    GeminiProvider = None
+    GEMINI_AVAILABLE = False
+
+from .custom_provider import CustomModelProvider, LocalModelProvider
 
 
 @dataclass
@@ -71,6 +84,19 @@ class MultiModelManager:
                     logger.info("✅ Claude model available")
             except Exception as e:
                 logger.warning(f"Claude not available: {e}")
+        
+        # Try Gemini
+        if GEMINI_AVAILABLE and settings.has_gemini_key:
+            try:
+                provider = GeminiProvider()
+                if await provider.is_available():
+                    self._models["gemini"] = provider
+                    self._available_models.append(
+                        ModelInfo("gemini", "Google", True, "Gemini 1.5 Pro")
+                    )
+                    logger.info("✅ Gemini model available")
+            except Exception as e:
+                logger.warning(f"Gemini not available: {e}")
         
         # Set default model
         self._current_model = settings.default_llm.lower()
@@ -149,6 +175,71 @@ class MultiModelManager:
         
         async for chunk in provider.stream_chat(messages, **kwargs):
             yield chunk
+
+    def register_custom_model(
+        self,
+        name: str,
+        api_url: str,
+        api_key: Optional[str] = None,
+        request_formatter: Optional[Callable] = None,
+        response_parser: Optional[Callable] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> bool:
+        """
+        Register a custom HTTP-based model.
+        
+        Args:
+            name: Name of the model
+            api_url: API endpoint URL
+            api_key: API key (if required)
+            request_formatter: Function to format requests
+            response_parser: Function to parse responses
+            headers: Custom HTTP headers
+            
+        Returns:
+            True if registered successfully
+        """
+        try:
+            provider = CustomModelProvider(
+                name=name,
+                api_url=api_url,
+                api_key=api_key,
+                request_formatter=request_formatter,
+                response_parser=response_parser,
+                headers=headers,
+            )
+            self._models[name.lower()] = provider
+            self._available_models.append(
+                ModelInfo(name.lower(), "Custom", True, f"Custom: {api_url}")
+            )
+            logger.info(f"✅ Registered custom model: {name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to register custom model {name}: {e}")
+            return False
+
+    def register_local_model(self, base_url: str, model_name: str = "local") -> bool:
+        """
+        Register a local model server.
+        
+        Args:
+            base_url: Base URL of local server
+            model_name: Name of the model
+            
+        Returns:
+            True if registered successfully
+        """
+        try:
+            provider = LocalModelProvider(base_url, model_name)
+            self._models[model_name.lower()] = provider
+            self._available_models.append(
+                ModelInfo(model_name.lower(), "Local", True, f"Local: {base_url}")
+            )
+            logger.info(f"✅ Registered local model: {model_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to register local model {model_name}: {e}")
+            return False
 
 
 # Global instance

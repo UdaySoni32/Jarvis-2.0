@@ -14,6 +14,14 @@ except ImportError:
     ClaudeProvider = None
     ANTHROPIC_AVAILABLE = False
 
+try:
+    from .gemini_provider import GeminiProvider, GEMINI_AVAILABLE
+except ImportError:
+    GeminiProvider = None
+    GEMINI_AVAILABLE = False
+
+from .custom_provider import CustomModelProvider, LocalModelProvider
+
 
 class LLMManager:
     """Manages LLM provider selection and initialization."""
@@ -71,6 +79,17 @@ class LLMManager:
                         "Anthropic API key not configured. Set ANTHROPIC_API_KEY in .env"
                     )
                 self._provider = ClaudeProvider()
+
+            elif provider_name == "gemini" or provider_name == "google":
+                if not GEMINI_AVAILABLE:
+                    raise ImportError(
+                        "Gemini not installed. Install with: pip install google-generativeai"
+                    )
+                if not settings.has_gemini_key:
+                    raise ValueError(
+                        "Gemini API key not configured. Set GEMINI_API_KEY in .env"
+                    )
+                self._provider = GeminiProvider()
 
             else:
                 raise ValueError(

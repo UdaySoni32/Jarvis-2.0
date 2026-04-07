@@ -20,6 +20,7 @@ from .github_integration import GitHubIntegrationTool
 from .docker_integration import DockerIntegrationTool
 from .clipboard_manager import ClipboardManagerTool
 from .api_testing import APITestingTool
+from .screen_capture_ocr import ScreenCaptureOCRTool
 
 
 def register_all_plugins():
@@ -45,6 +46,7 @@ def register_all_plugins():
         DockerIntegrationTool(),
         ClipboardManagerTool(),
         APITestingTool(),
+        ScreenCaptureOCRTool(),
     ]
 
     for plugin in plugins:

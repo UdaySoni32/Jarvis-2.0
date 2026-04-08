@@ -65,9 +65,13 @@ class PluginExecutionResult(BaseModel):
 # Get plugin registry from app state
 async def get_plugin_registry(request: Request):
     """Get plugin registry from application state"""
+    registry = getattr(request.app.state, "plugin_registry", None)
+    if registry is not None:
+        return registry
+
     try:
-        # Import here to avoid circular imports
         from ...plugins.registry import PluginRegistry
+
         return PluginRegistry()
     except Exception as e:
         logger.error(f"Failed to get plugin registry: {e}")

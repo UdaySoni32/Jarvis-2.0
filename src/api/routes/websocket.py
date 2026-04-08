@@ -19,6 +19,8 @@ from enum import Enum
 from . import websocket_router
 from ..middleware.auth import get_current_user_from_token, get_current_user, get_current_user_optional
 from ..models.user import User
+from ...core.llm.manager import llm_manager
+from ...core.llm.base import Message
 
 logger = logging.getLogger(__name__)
 
@@ -336,10 +338,9 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
     """Handle chat message - integrate with LLM for responses"""
     try:
         chat_data = ChatMessage(**message.data)
-        
-        # Get LLM manager from app state
-        from ...ai.llm_manager import LLMManager
-        llm_manager = LLMManager()
+
+        if chat_data.model:
+            llm_manager.set_model(chat_data.model)
         
         if chat_data.streaming:
             # Handle streaming response
@@ -357,9 +358,8 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
             
             # Stream LLM response
             full_response = ""
-            async for chunk in llm_manager.generate_stream(
-                chat_data.content, 
-                model=chat_data.model
+            async for chunk in llm_manager.stream_completion(
+                [Message("user", chat_data.content)]
             ):
                 full_response += chunk
                 
@@ -394,10 +394,7 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
         
         else:
             # Handle non-streaming response
-            response = await llm_manager.generate(
-                chat_data.content,
-                model=chat_data.model
-            )
+            response = await llm_manager.generate(chat_data.content)
             
             response_msg = WebSocketMessage(
                 type=EventType.MESSAGE,

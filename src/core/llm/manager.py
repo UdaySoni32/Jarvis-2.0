@@ -1,6 +1,6 @@
 """LLM manager for selecting and managing LLM providers."""
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from ..config import settings
 from ..logger import logger
@@ -29,6 +29,7 @@ class LLMManager:
     def __init__(self):
         """Initialize LLM manager."""
         self._provider: Optional[BaseLLMProvider] = None
+        self._provider_name: Optional[str] = None
         logger.info("LLM Manager initialized")
 
     async def get_provider(self, force_reload: bool = False) -> BaseLLMProvider:
@@ -44,10 +45,10 @@ class LLMManager:
         Raises:
             ValueError: If no valid provider is configured
         """
-        if self._provider and not force_reload:
+        if self._provider and not force_reload and self._provider_name == provider_name:
             return self._provider
 
-        provider_name = settings.default_llm.lower()
+        provider_name = self.current_model
         logger.info(f"Initializing LLM provider: {provider_name}")
 
         try:
@@ -106,6 +107,7 @@ class LLMManager:
                 )
 
             logger.info(f"✅ {provider_name} provider ready")
+            self._provider_name = provider_name
             return self._provider
 
         except Exception as e:
@@ -121,6 +123,7 @@ class LLMManager:
                         logger.warning(
                             f"Using Ollama as fallback (primary {provider_name} failed)"
                         )
+                        self._provider_name = "ollama"
                         return self._provider
                 except Exception:
                     pass
@@ -146,6 +149,10 @@ class LLMManager:
         """
         from .base import Message
 
+        model = kwargs.pop("model", None)
+        if model:
+            self.set_model(model)
+
         provider = await self.get_provider()
         messages = [Message("user", prompt)]
         return await provider.generate(messages, **kwargs)
@@ -161,8 +168,12 @@ class LLMManager:
         Returns:
             Generated response
         """
+        model = kwargs.pop("model", None)
+        if model:
+            self.set_model(model)
+
         provider = await self.get_provider()
-        return await provider.generate(messages, **kwargs)
+        return await provider.generate(self._normalize_messages(messages), **kwargs)
 
     async def stream_chat(self, messages: list, **kwargs):
         """
@@ -175,8 +186,12 @@ class LLMManager:
         Yields:
             Response chunks
         """
+        model = kwargs.pop("model", None)
+        if model:
+            self.set_model(model)
+
         provider = await self.get_provider()
-        async for chunk in provider.generate_stream(messages, **kwargs):
+        async for chunk in provider.generate_stream(self._normalize_messages(messages), **kwargs):
             yield chunk
 
     def count_tokens(self, text: str) -> int:
@@ -185,6 +200,96 @@ class LLMManager:
             return self._provider.count_tokens(text)
         # Rough estimate if no provider
         return len(text) // 4
+
+    @property
+    def current_model(self) -> str:
+        """Return the active provider name."""
+        return self._provider_name or settings.default_llm.lower()
+
+    def set_model(self, model_name: str) -> bool:
+        """Set the active provider name."""
+        normalized = model_name.strip().lower()
+        if not normalized:
+            raise ValueError("Model name cannot be empty")
+
+        self._provider_name = normalized
+        self._provider = None
+        logger.info(f"Switched to model: {normalized}")
+        return True
+
+    def check_provider_available(self, provider_name: str) -> bool:
+        """Check whether a provider can be used with the current environment."""
+        normalized = provider_name.strip().lower()
+
+        if normalized == "openai":
+            return OPENAI_AVAILABLE and settings.has_openai_key
+        if normalized == "ollama":
+            return HTTPX_AVAILABLE
+        if normalized in {"claude", "anthropic"}:
+            return bool(ClaudeProvider) and ANTHROPIC_AVAILABLE and settings.has_anthropic_key
+        if normalized in {"gemini", "google"}:
+            return bool(GeminiProvider) and GEMINI_AVAILABLE and settings.has_gemini_key
+        return False
+
+    def get_available_models(self) -> List[Dict[str, Any]]:
+        """Return the configured model/providers and their availability."""
+        return [
+            {
+                "name": "openai",
+                "provider": "OpenAI",
+                "available": self.check_provider_available("openai"),
+                "description": settings.openai_model,
+            },
+            {
+                "name": "ollama",
+                "provider": "Ollama",
+                "available": self.check_provider_available("ollama"),
+                "description": f"Local: {settings.ollama_model}",
+            },
+            {
+                "name": "claude",
+                "provider": "Anthropic",
+                "available": self.check_provider_available("claude"),
+                "description": settings.claude_model,
+            },
+            {
+                "name": "gemini",
+                "provider": "Google",
+                "available": self.check_provider_available("gemini"),
+                "description": settings.gemini_model,
+            },
+        ]
+
+    async def get_completion(self, messages: list, **kwargs) -> str:
+        """Compatibility helper for chat routes."""
+        return await self.chat(messages, **kwargs)
+
+    async def stream_completion(self, messages: list, **kwargs):
+        """Compatibility helper for streaming chat routes."""
+        async for chunk in self.stream_chat(messages, **kwargs):
+            yield chunk
+
+    def _normalize_messages(self, messages: list) -> List["Message"]:
+        """Coerce dicts and message-like objects into Message instances."""
+        from .base import Message
+
+        normalized: List[Message] = []
+        for message in messages:
+            if isinstance(message, Message):
+                normalized.append(message)
+            elif isinstance(message, dict):
+                normalized.append(
+                    Message(
+                        role=message.get("role", "user"),
+                        content=message.get("content", ""),
+                    )
+                )
+            elif hasattr(message, "role") and hasattr(message, "content"):
+                normalized.append(Message(str(message.role), str(message.content)))
+            else:
+                raise TypeError(f"Unsupported message type: {type(message)!r}")
+
+        return normalized
 
 
 # Global LLM manager instance

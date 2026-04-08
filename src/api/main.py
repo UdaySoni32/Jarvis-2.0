@@ -76,8 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     
     # Initialize LLM manager
     try:
-        from ..ai.llm_manager import LLMManager
-        llm_manager = LLMManager()
+        from ..core.llm.manager import llm_manager
         app.state.llm_manager = llm_manager
         logger.info("✅ LLM manager initialized")
     except Exception as e:

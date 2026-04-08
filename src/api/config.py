@@ -78,6 +78,26 @@ class APISettings(BaseSettings):
         case_sensitive = False
         extra = "ignore"  # Ignore extra fields from .env
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._apply_runtime_env_overrides()
+
+    def _apply_runtime_env_overrides(self):
+        """Apply shell environment overrides after dotenv loading."""
+        overrides = {
+            "API_HOST": ("host", str),
+            "API_PORT": ("port", int),
+            "DEBUG": ("debug", lambda value: value.lower() in {"1", "true", "yes", "on"}),
+            "LOG_LEVEL": ("log_level", str),
+            "DATABASE_URL": ("database_url", str),
+            "DEFAULT_LLM": ("default_llm", str),
+        }
+
+        for env_name, (attr_name, parser) in overrides.items():
+            raw_value = os.getenv(env_name)
+            if raw_value is not None and raw_value != "":
+                setattr(self, attr_name, parser(raw_value))
+
 
 # Global settings instance
 settings = APISettings()

@@ -61,3 +61,39 @@ __all__ = [
     "ChatRequest", "ChatResponse", 
     "PluginInfo", "SystemStatus"
 ]
+
+# ============ Chat Schemas ============
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from enum import Enum
+
+
+class MessageRole(str, Enum):
+    """Message role"""
+    user = "user"
+    assistant = "assistant"
+    system = "system"
+
+
+class Message(BaseModel):
+    """Chat message"""
+    role: MessageRole
+    content: str
+
+
+class ChatRequest(BaseModel):
+    """Chat completion request"""
+    message: str = Field(..., min_length=1, max_length=10000)
+    conversation_id: Optional[str] = None
+    model: Optional[str] = None
+    context: Optional[List[Message]] = None
+
+
+class ChatResponse(BaseModel):
+    """Chat completion response"""
+    message: str
+    conversation_id: str
+    model_used: str
+    created_at: datetime

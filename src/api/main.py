@@ -38,6 +38,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     logger.info(f"Debug mode: {settings.debug}")
     logger.info(f"CORS enabled: {settings.cors_enabled}")
     
+    # Initialize database
+    from .database import init_database
+    init_database()
+    
     yield
     
     # Shutdown

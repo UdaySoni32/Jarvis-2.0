@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Dict, List
 import uuid
 
-from core.tools.base import BaseTool, ToolParameter
-from core.config import settings
+from src.core.tools.base import BaseTool, ToolParameter
+from src.core.config import settings
 
 
 class NotesManager:

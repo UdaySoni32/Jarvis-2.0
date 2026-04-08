@@ -9,7 +9,7 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-from core.tools.base import BaseTool, ToolParameter
+from src.core.tools.base import BaseTool, ToolParameter
 
 
 class ProcessManagerTool(BaseTool):

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
-from core.tools.base import BaseTool, ToolParameter
+from src.core.tools.base import BaseTool, ToolParameter
 
 
 class FileReadTool(BaseTool):

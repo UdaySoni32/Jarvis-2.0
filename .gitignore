@@ -60,7 +60,8 @@ logs/
 *.sqlite3
 
 # AI/ML
-models/
+/models/
+!/src/api/models/
 *.pt
 *.pth
 *.onnx

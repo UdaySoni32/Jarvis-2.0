@@ -67,6 +67,11 @@ def get_user_by_id(db: Session, user_id: str):
     return db.query(User).filter(User.id == user_id).first()
 
 
+def get_user(db: Session, user_id: str):
+    """Get user by ID (alias for get_user_by_id)"""
+    return get_user_by_id(db, user_id)
+
+
 def create_user(db: Session, username: str, email: str, hashed_password: str, full_name: str = None):
     """Create new user"""
     from ..models.user import User

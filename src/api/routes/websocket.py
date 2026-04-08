@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import Enum
 
 from . import websocket_router
-from ..middleware.auth import get_current_user_from_token
+from ..middleware.auth import get_current_user_from_token, get_current_user, get_current_user_optional
 from ..models.user import User
 
 logger = logging.getLogger(__name__)

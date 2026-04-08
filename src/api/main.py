@@ -341,15 +341,17 @@ async def security_headers_middleware(request: Request, call_next):
 async def health_check():
     """Comprehensive health check endpoint"""
     import psutil
-    from ..models import User
-    from .database import get_db_session
+    from .models.user import User
+    from .database import SessionLocal
     
     # Database health
     db_healthy = True
     try:
-        with get_db_session() as session:
-            session.query(User).count()
-    except Exception:
+        session = SessionLocal()
+        session.query(User).count()
+        session.close()
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
         db_healthy = False
     
     # System metrics

@@ -110,3 +110,14 @@ memory_store/
 # Config with secrets
 config/secrets.yaml
 config/local.yaml
+
+# Progress reports (tracked separately in ~/jarvis-2.0-progress/)
+PROGRESS.md
+CURRENT_STATE.md
+STATUS.md
+PROJECT_PLAN.md
+PHASE_*.md
+*_COMPLETE.md
+CONTRIBUTING.md
+LLM_CONTEXT.md
+GITHUB_SETUP.md

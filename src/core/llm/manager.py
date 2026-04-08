@@ -45,10 +45,11 @@ class LLMManager:
         Raises:
             ValueError: If no valid provider is configured
         """
+        provider_name = self.current_model
+
         if self._provider and not force_reload and self._provider_name == provider_name:
             return self._provider
 
-        provider_name = self.current_model
         logger.info(f"Initializing LLM provider: {provider_name}")
 
         try:

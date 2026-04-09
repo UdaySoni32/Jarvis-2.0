@@ -38,7 +38,7 @@ interface WebSocketState {
  * Main WebSocket hook
  */
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const { token } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const [state, setState] = useState<WebSocketState>({
     connected: false,
     connecting: false,
@@ -63,6 +63,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   };
 
   const connect = useCallback(async () => {
+    const token = typeof window !== 'undefined'
+      ? localStorage.getItem('access_token')
+      : null;
+
     if (!token) {
       setState(prev => ({ 
         ...prev, 
@@ -131,7 +135,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         connecting: false
       }));
     }
-  }, [token, options.url]);
+  }, [isAuthenticated, options.url]);
 
   const disconnect = useCallback(() => {
     if (clientRef.current) {
@@ -172,14 +176,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   // Auto-connect on mount if enabled
   useEffect(() => {
-    if (options.autoConnect !== false && token) {
+    if (options.autoConnect !== false && isAuthenticated) {
       connect();
     }
 
     return () => {
       disconnect();
     };
-  }, [options.autoConnect, token]); // Don't include connect/disconnect to avoid loops
+  }, [options.autoConnect, isAuthenticated, connect, disconnect]);
 
   // Update reconnect attempts in state
   useEffect(() => {

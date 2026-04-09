@@ -2,6 +2,20 @@ import { create } from "zustand";
 import type { User } from "@/types";
 import { apiClient } from "@/lib/api/client";
 
+const getApiErrorMessage = (error: any, fallback: string): string => {
+  const data = error?.response?.data;
+  if (typeof data?.detail === "string" && data.detail.trim().length > 0) {
+    return data.detail;
+  }
+  if (typeof data?.message === "string" && data.message.trim().length > 0) {
+    return data.message;
+  }
+  if (typeof error?.message === "string" && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return fallback;
+};
+
 interface AuthState {
   user: User | null;
   isLoading: boolean;
@@ -26,7 +40,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = await apiClient.getCurrentUser();
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
-      set({ error: error.response?.data?.detail || "Login failed", isLoading: false });
+      set({ error: getApiErrorMessage(error, "Login failed"), isLoading: false });
       throw error;
     }
   },
@@ -38,7 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = await apiClient.getCurrentUser();
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
-      set({ error: error.response?.data?.detail || "Registration failed", isLoading: false });
+      set({ error: getApiErrorMessage(error, "Registration failed"), isLoading: false });
       throw error;
     }
   },

@@ -6,6 +6,7 @@ Enables voice interaction with JARVIS
 
 import logging
 import asyncio
+import inspect
 from typing import Optional
 from rich.console import Console
 from rich.panel import Panel
@@ -17,6 +18,10 @@ from ..voice import (
     create_tts_engine,
     VoiceAssistant,
     WakeWordDetector,
+    AssistantMode,
+    IntentRouter,
+    MacroEngine,
+    FollowupResolver,
 )
 from ..core.config import settings
 
@@ -37,6 +42,29 @@ class VoiceMode:
         self.conversation_handler = conversation_handler
         self.assistant: Optional[VoiceAssistant] = None
         self.is_active = False
+        self.intent_router = IntentRouter()
+        self.active_mode: Optional[AssistantMode] = None  # None => auto-routing
+        self.macro_engine = MacroEngine()
+        self.followup_resolver = FollowupResolver()
+        self.last_user_input: Optional[str] = None
+        self.last_response: Optional[str] = None
+
+        self._handler_accepts_mode = False
+        self._handler_accepts_original_input = False
+        try:
+            signature = inspect.signature(self.conversation_handler)
+            parameters = signature.parameters
+            accepts_kwargs = any(
+                param.kind == inspect.Parameter.VAR_KEYWORD
+                for param in parameters.values()
+            )
+            self._handler_accepts_mode = accepts_kwargs or "mode" in parameters
+            self._handler_accepts_original_input = (
+                accepts_kwargs or "original_input" in parameters
+            )
+        except Exception:
+            # Keep backward-compatible default behavior if introspection fails.
+            pass
     
     async def initialize(self):
         """Initialize voice components"""
@@ -118,8 +146,166 @@ class VoiceMode:
         help_text.append("• Press ", style="dim")
         help_text.append("Ctrl+C", style="bold red")
         help_text.append(" to exit voice mode\n", style="dim")
+        help_text.append("\nMode routing:\n", style="bold cyan")
+        help_text.append("• ", style="dim")
+        help_text.append("mode coding|ops|productivity|research|general", style="bold yellow")
+        help_text.append(" to lock a mode\n", style="dim")
+        help_text.append("• ", style="dim")
+        help_text.append("mode auto", style="bold yellow")
+        help_text.append(" to return to automatic intent routing\n", style="dim")
+        help_text.append("• ", style="dim")
+        help_text.append("current mode", style="bold yellow")
+        help_text.append(" to inspect active routing mode\n", style="dim")
+        help_text.append("\nVoice macros:\n", style="bold cyan")
+        help_text.append("• ", style="dim")
+        help_text.append("macros", style="bold yellow")
+        help_text.append(" to list available macros\n", style="dim")
+        help_text.append("• ", style="dim")
+        help_text.append("run macro <name>", style="bold yellow")
+        help_text.append(" to execute a multi-step workflow\n", style="dim")
+        help_text.append("\nNatural followups:\n", style="bold cyan")
+        help_text.append("• ", style="dim")
+        help_text.append("do the same for <target>", style="bold yellow")
+        help_text.append(", ", style="dim")
+        help_text.append("make it shorter", style="bold yellow")
+        help_text.append(", ", style="dim")
+        help_text.append("expand on that", style="bold yellow")
+        help_text.append("\n", style="dim")
         
         console.print(Panel(help_text, border_style="cyan"))
+
+    @staticmethod
+    def _mode_from_text(mode_text: str) -> Optional[AssistantMode]:
+        value = mode_text.strip().lower()
+        mapping = {
+            "general": AssistantMode.GENERAL,
+            "coding": AssistantMode.CODING,
+            "ops": AssistantMode.OPS,
+            "productivity": AssistantMode.PRODUCTIVITY,
+            "research": AssistantMode.RESEARCH,
+        }
+        return mapping.get(value)
+
+    def _handle_mode_command(self, user_input: str) -> bool:
+        """Handle voice mode switching commands."""
+        normalized = user_input.strip().lower()
+
+        if normalized in {"current mode", "what mode", "what mode are you", "mode"}:
+            active = self.active_mode.value if self.active_mode else "auto"
+            console.print(f"[dim]Current voice mode: [bold]{active}[/bold][/dim]")
+            return True
+
+        command_prefixes = ("mode ", "set mode ", "switch to ")
+        requested: Optional[str] = None
+        for prefix in command_prefixes:
+            if normalized.startswith(prefix):
+                requested = normalized[len(prefix):].strip()
+                break
+
+        if requested is None:
+            return False
+
+        if requested.endswith(" mode"):
+            requested = requested[:-5].strip()
+
+        if requested in {"auto", "automatic"}:
+            self.active_mode = None
+            console.print("[green]✅ Voice mode routing set to auto[/green]")
+            return True
+
+        selected = self._mode_from_text(requested)
+        if selected is None:
+            console.print(
+                "[yellow]Unknown mode. Use: general, coding, ops, productivity, research, auto[/yellow]"
+            )
+            return True
+
+        self.active_mode = selected
+        console.print(f"[green]✅ Voice mode locked to {selected.value}[/green]")
+        return True
+
+    async def _invoke_conversation_handler(
+        self,
+        routed_input: str,
+        original_input: str,
+        mode: AssistantMode,
+    ) -> str:
+        """Invoke conversation handler while preserving backward compatibility."""
+        kwargs = {}
+        if self._handler_accepts_mode:
+            kwargs["mode"] = mode.value
+        if self._handler_accepts_original_input:
+            kwargs["original_input"] = original_input
+
+        if kwargs:
+            return await self.conversation_handler(routed_input, **kwargs)
+        return await self.conversation_handler(routed_input)
+
+    async def _handle_macro_command(self, user_input: str) -> bool:
+        """Handle macro listing and execution commands."""
+        normalized = user_input.strip().lower()
+
+        if normalized in {"macros", "list macros", "macro list"}:
+            macro_lines = ["[bold cyan]Available Voice Macros[/bold cyan]\n"]
+            for macro in self.macro_engine.list_macros():
+                macro_lines.append(
+                    f"• [bold]{macro.name}[/bold] "
+                    f"({macro.mode.value}) - {macro.description}"
+                )
+            console.print(Panel("\n".join(macro_lines), border_style="cyan"))
+            return True
+
+        macro_name: Optional[str] = None
+        if normalized.startswith("run macro "):
+            macro_name = user_input.strip()[len("run macro "):].strip()
+        elif normalized.startswith("macro "):
+            macro_name = user_input.strip()[len("macro "):].strip()
+
+        if not macro_name:
+            return False
+
+        macro = self.macro_engine.get_macro(macro_name)
+        if not macro:
+            console.print(
+                f"[yellow]Unknown macro: {macro_name}[/yellow]\n"
+                "[dim]Say 'macros' to list available workflows.[/dim]"
+            )
+            return True
+
+        console.print(
+            Panel(
+                f"[bold]{macro.name}[/bold]\n{macro.description}",
+                title="[cyan]Running macro[/cyan]",
+                border_style="cyan",
+            )
+        )
+        if self.assistant:
+            self.assistant.speak(f"Running macro {macro.name.replace('-', ' ')}")
+
+        for index, step in enumerate(macro.steps, start=1):
+            console.print(f"[yellow]⚙️ Macro step {index}/{len(macro.steps)}[/yellow]: {step}")
+            routed_input, _ = self.intent_router.route_input(
+                step,
+                explicit_mode=macro.mode,
+            )
+            response = await self._invoke_conversation_handler(
+                routed_input=routed_input,
+                original_input=step,
+                mode=macro.mode,
+            )
+            if response:
+                console.print(
+                    Panel(
+                        response,
+                        title=f"[green]{macro.name} · Step {index}[/green]",
+                        border_style="green",
+                    )
+                )
+
+        if self.assistant:
+            self.assistant.speak("Macro completed")
+        console.print("[green]✅ Macro completed[/green]")
+        return True
     
     async def run_conversation_mode(self):
         """Run continuous voice conversation"""
@@ -155,12 +341,48 @@ class VoiceMode:
                 if user_input.lower() in ['exit', 'quit', 'stop', 'goodbye']:
                     self.assistant.speak("Goodbye!")
                     break
+
+                # Handle mode routing commands
+                if self._handle_mode_command(user_input):
+                    continue
+
+                # Handle workflow macros
+                if await self._handle_macro_command(user_input):
+                    continue
+
+                # Resolve natural follow-up phrases into explicit requests
+                followup = self.followup_resolver.resolve(
+                    user_input=user_input,
+                    last_user_input=self.last_user_input,
+                    last_response=self.last_response,
+                )
+                if followup.is_followup:
+                    console.print(
+                        f"[dim]↪ Follow-up resolved ({followup.reason}): "
+                        f"{followup.resolved_input}[/dim]"
+                    )
+
+                # Route request into a specialized assistant mode
+                routed_input, route = self.intent_router.route_input(
+                    followup.resolved_input,
+                    explicit_mode=self.active_mode,
+                )
+                console.print(
+                    f"[dim]🎯 Intent route: {route.mode.value} "
+                    f"(source={route.source}, confidence={route.confidence:.2f})[/dim]"
+                )
                 
                 # Get response from conversation handler
                 console.print("[yellow]🤖 Thinking...[/yellow]")
-                response = await self.conversation_handler(user_input)
+                response = await self._invoke_conversation_handler(
+                    routed_input=routed_input,
+                    original_input=user_input,
+                    mode=route.mode,
+                )
                 
                 if response:
+                    self.last_user_input = followup.resolved_input
+                    self.last_response = response
                     # Display response
                     console.print(Panel(
                         response,

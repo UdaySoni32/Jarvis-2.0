@@ -82,11 +82,27 @@ Response:
 curl http://localhost:8000/
 ```
 
+### Test Plugin Metadata Endpoints
+```bash
+# Login first to get token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"testuser","password":"TestPass123!"}' | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/plugins/categories
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/plugins/stats
+```
+
 ### Test WebSocket (Browser Console)
 ```javascript
 const ws = new WebSocket('ws://localhost:8000/api/v1/ws/chat?token=YOUR_TOKEN');
 ws.onopen = () => console.log('Connected');
 ws.onmessage = (e) => console.log('Message:', JSON.parse(e.data));
+```
+
+WebSocket server status endpoint:
+```bash
+curl http://localhost:8000/api/v1/ws/status
 ```
 
 ## Individual Interface Testing
@@ -127,6 +143,7 @@ python3 main.py --voice
 - Messages show **live streaming** (character by character)
 - Connection status updates
 - Auto-reconnects on restart
+- Connection count does not exceed configured `WS_MAX_CONNECTIONS`
 
 ### ✅ Fallback System
 - WebSocket mode shows green status

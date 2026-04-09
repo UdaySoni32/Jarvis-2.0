@@ -36,11 +36,17 @@ cd Jarvis-2.0
 ./quick_setup.sh
 ```
 
+`quick_setup.sh` now:
+- creates `venv` and installs Python dependencies
+- installs web dependencies (`web/node_modules`)
+- creates `.env` from `.env.example` (if missing)
+- defaults development DB to SQLite (`DATABASE_URL=sqlite:///jarvis.db`)
+
 ### 3. Configure
-Copy `.env.example` to `.env` and add your API keys:
+Add your API keys in `.env`:
 ```bash
-cp .env.example .env
-# Edit .env with your OpenAI, Claude, or Gemini API keys
+nano .env
+# Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, or use local Ollama
 ```
 
 ### 4. Run

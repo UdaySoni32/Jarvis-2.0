@@ -21,6 +21,7 @@ from ..middleware.auth import get_current_user_from_token, get_current_user, get
 from ..models.user import User
 from ...core.llm.manager import llm_manager
 from ...core.llm.base import Message
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,16 @@ class WebSocketManager:
         self.typing_users: Dict[str, Set[int]] = {}  # conversation_id -> user_ids
         self.connection_metadata: Dict[WebSocket, Dict] = {}
         
-    async def connect(self, websocket: WebSocket, user: User):
+    async def connect(self, websocket: WebSocket, user: User) -> bool:
         """Accept new WebSocket connection"""
+        total_connections = sum(len(conns) for conns in self.active_connections.values())
+        if total_connections >= settings.websocket_max_connections:
+            await websocket.close(
+                code=status.WS_1013_TRY_AGAIN_LATER,
+                reason="WebSocket connection limit reached",
+            )
+            return False
+
         await websocket.accept()
         
         # Add to active connections
@@ -115,6 +124,7 @@ class WebSocketManager:
             }
         )
         await self.send_to_user(user.id, welcome_msg.dict())
+        return True
     
     async def disconnect(self, websocket: WebSocket):
         """Handle WebSocket disconnection"""
@@ -143,6 +153,11 @@ class WebSocketManager:
         # Remove from typing indicators
         for conversation_id, typing_users in self.typing_users.items():
             typing_users.discard(user_id)
+        self.typing_users = {
+            conversation_id: users
+            for conversation_id, users in self.typing_users.items()
+            if users
+        }
         
         logger.info(f"User {user_id} disconnected from WebSocket")
     
@@ -268,7 +283,9 @@ async def websocket_chat_endpoint(
     user: User = Depends(get_websocket_user)
 ):
     """Main WebSocket endpoint for real-time chat"""
-    await manager.connect(websocket, user)
+    connected = await manager.connect(websocket, user)
+    if not connected:
+        return
     
     try:
         while True:
@@ -339,8 +356,7 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
     try:
         chat_data = ChatMessage(**message.data)
 
-        if chat_data.model:
-            llm_manager.set_model(chat_data.model)
+        model_kwargs = {"model": chat_data.model} if chat_data.model else {}
         
         if chat_data.streaming:
             # Handle streaming response
@@ -359,7 +375,8 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
             # Stream LLM response
             full_response = ""
             async for chunk in llm_manager.stream_completion(
-                [Message("user", chat_data.content)]
+                [Message("user", chat_data.content)],
+                **model_kwargs
             ):
                 full_response += chunk
                 
@@ -394,7 +411,7 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
         
         else:
             # Handle non-streaming response
-            response = await llm_manager.generate(chat_data.content)
+            response = await llm_manager.generate(chat_data.content, **model_kwargs)
             
             response_msg = WebSocketMessage(
                 type=EventType.MESSAGE,
@@ -489,7 +506,7 @@ async def websocket_status():
     return {
         "status": "active",
         "connections": sum(len(conns) for conns in manager.active_connections.values()),
-        "online_users": len(manager.user_presence),
+        "online_users": len(manager.get_online_users()),
         "typing_conversations": len(manager.typing_users),
         "features": ["chat", "typing", "presence", "notifications", "streaming"]
     }

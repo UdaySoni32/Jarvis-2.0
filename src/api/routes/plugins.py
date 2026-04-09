@@ -72,7 +72,9 @@ async def get_plugin_registry(request: Request):
     try:
         from ...plugins.registry import PluginRegistry
 
-        return PluginRegistry()
+        registry = PluginRegistry()
+        request.app.state.plugin_registry = registry
+        return registry
     except Exception as e:
         logger.error(f"Failed to get plugin registry: {e}")
         raise HTTPException(
@@ -114,7 +116,10 @@ async def list_plugins(
                     author=plugin_info.get("author", "JARVIS Team"),
                     enabled=enabled,
                     installed=True,  # All loaded plugins are considered installed
-                    configuration_schema=plugin_info.get("config_schema", {}),
+                    configuration_schema=plugin_info.get(
+                        "configuration_schema",
+                        plugin_info.get("config_schema", {})
+                    ),
                     requirements=plugin_info.get("requirements", []),
                     permissions=plugin_info.get("permissions", [])
                 )
@@ -140,6 +145,88 @@ async def list_plugins(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list plugins: {str(e)}"
+        )
+
+
+@plugins_router.get("/categories",
+                   summary="List Plugin Categories",
+                   description="Get list of all plugin categories")
+async def list_plugin_categories(
+    plugin_registry = Depends(get_plugin_registry)
+):
+    """Get list of all plugin categories"""
+    try:
+        plugins = plugin_registry.get_available_plugins()
+        categories = set()
+        
+        for plugin_name, plugin_class in plugins.items():
+            try:
+                plugin_info = plugin_class.get_info()
+                category = plugin_info.get("category", "general")
+                categories.add(category)
+            except Exception as e:
+                logger.warning(f"Error getting category for plugin {plugin_name}: {e}")
+                continue
+        
+        return {
+            "categories": sorted(list(categories)),
+            "total_count": len(categories)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing plugin categories: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list plugin categories: {str(e)}"
+        )
+
+
+@plugins_router.get("/stats",
+                   summary="Plugin Statistics", 
+                   description="Get plugin usage statistics")
+async def get_plugin_stats(
+    plugin_registry = Depends(get_plugin_registry),
+    current_user: User = Depends(get_current_user)
+):
+    """Get plugin usage statistics"""
+    try:
+        plugins = plugin_registry.get_available_plugins()
+        
+        stats = {
+            "total_plugins": len(plugins),
+            "enabled_plugins": len(plugins),  # All enabled by default for now
+            "disabled_plugins": 0,
+            "categories": {},
+            "user_plugins": {}
+        }
+        
+        for plugin_name, plugin_class in plugins.items():
+            try:
+                plugin_info = plugin_class.get_info()
+                category = plugin_info.get("category", "general")
+                
+                # Count by category
+                if category not in stats["categories"]:
+                    stats["categories"][category] = 0
+                stats["categories"][category] += 1
+                
+                # All plugins enabled by default for now
+                stats["user_plugins"][plugin_name] = {
+                    "enabled": True,
+                    "category": category
+                }
+                
+            except Exception as e:
+                logger.warning(f"Error getting stats for plugin {plugin_name}: {e}")
+                continue
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting plugin stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get plugin statistics: {str(e)}"
         )
 
 
@@ -177,7 +264,10 @@ async def get_plugin(
             author=plugin_info.get("author", "JARVIS Team"),
             enabled=enabled,
             installed=True,
-            configuration_schema=plugin_info.get("config_schema", {}),
+            configuration_schema=plugin_info.get(
+                "configuration_schema",
+                plugin_info.get("config_schema", {})
+            ),
             requirements=plugin_info.get("requirements", []),
             permissions=plugin_info.get("permissions", [])
         )
@@ -215,22 +305,21 @@ async def get_plugin_actions(
         # Get plugin instance to check available actions
         plugin_instance = plugin_class()
         actions = {}
-        
-        # Get all methods that don't start with underscore (public methods)
-        for method_name in dir(plugin_instance):
-            if (not method_name.startswith('_') and 
-                callable(getattr(plugin_instance, method_name)) and
-                method_name not in ['get_info', 'is_enabled', 'configure']):
-                
-                method = getattr(plugin_instance, method_name)
-                
-                # Get method documentation
-                doc = method.__doc__ or "No description available"
-                
-                actions[method_name] = {
-                    "description": doc.strip(),
-                    "parameters": {},  # Could be enhanced to parse method signature
+
+        parameters = plugin_instance.get_parameters()
+        action_parameter = parameters.get("action")
+
+        if action_parameter and action_parameter.enum:
+            for action_name in action_parameter.enum:
+                actions[action_name] = {
+                    "description": action_parameter.description or "No description available",
+                    "parameters": {},
                 }
+        else:
+            actions["execute"] = {
+                "description": "Execute plugin with provided parameters",
+                "parameters": {},
+            }
         
         return {
             "plugin_name": plugin_name,
@@ -278,9 +367,8 @@ async def execute_plugin_action(
         start_time = time.time()
         
         try:
-            # Get plugin executor
-            from ...plugins.executor import PluginExecutor
-            executor = PluginExecutor()
+            from ...core.tools.executor import tool_executor
+            execution_params = {"action": execution_request.action, **execution_request.parameters}
             
             if execution_request.async_execution:
                 # Execute asynchronously in background
@@ -288,11 +376,8 @@ async def execute_plugin_action(
                 
                 background_tasks.add_task(
                     _execute_plugin_background,
-                    executor,
                     plugin_name,
-                    execution_request.action,
-                    execution_request.parameters,
-                    current_user.id,
+                    execution_params,
                     task_id
                 )
                 
@@ -307,18 +392,14 @@ async def execute_plugin_action(
             
             else:
                 # Execute synchronously
-                result = await executor.execute_plugin(
-                    plugin_name,
-                    execution_request.action,
-                    execution_request.parameters,
-                    user_id=current_user.id
-                )
+                result = await tool_executor.execute(plugin_name, execution_params)
                 
                 return PluginExecutionResult(
                     plugin_name=plugin_name,
                     action=execution_request.action,
-                    success=True,
-                    result=result,
+                    success=result.get("success", False),
+                    result=result.get("result"),
+                    error=result.get("error"),
                     execution_time=time.time() - start_time,
                     timestamp=datetime.now()
                 )
@@ -344,21 +425,14 @@ async def execute_plugin_action(
 
 
 async def _execute_plugin_background(
-    executor,
-    plugin_name: str,
-    action: str,
-    parameters: Dict[str, Any],
-    user_id: int,
+    tool_name: str,
+    arguments: Dict[str, Any],
     task_id: str
 ):
     """Execute plugin in background task"""
     try:
-        result = await executor.execute_plugin(
-            plugin_name,
-            action,
-            parameters,
-            user_id=user_id
-        )
+        from ...core.tools.executor import tool_executor
+        await tool_executor.execute(tool_name, arguments)
         
         logger.info(f"Background plugin execution completed: {task_id}")
         # In a real implementation, you'd store this result somewhere
@@ -366,85 +440,3 @@ async def _execute_plugin_background(
         
     except Exception as e:
         logger.error(f"Background plugin execution failed: {task_id}, error: {e}")
-
-
-@plugins_router.get("/categories/",
-                   summary="List Plugin Categories",
-                   description="Get list of all plugin categories")
-async def list_plugin_categories(
-    plugin_registry = Depends(get_plugin_registry)
-):
-    """Get list of all plugin categories"""
-    try:
-        plugins = plugin_registry.get_available_plugins()
-        categories = set()
-        
-        for plugin_name, plugin_class in plugins.items():
-            try:
-                plugin_info = plugin_class.get_info()
-                category = plugin_info.get("category", "general")
-                categories.add(category)
-            except Exception as e:
-                logger.warning(f"Error getting category for plugin {plugin_name}: {e}")
-                continue
-        
-        return {
-            "categories": sorted(list(categories)),
-            "total_count": len(categories)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error listing plugin categories: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list plugin categories: {str(e)}"
-        )
-
-
-@plugins_router.get("/stats/",
-                   summary="Plugin Statistics", 
-                   description="Get plugin usage statistics")
-async def get_plugin_stats(
-    plugin_registry = Depends(get_plugin_registry),
-    current_user: User = Depends(get_current_user)
-):
-    """Get plugin usage statistics"""
-    try:
-        plugins = plugin_registry.get_available_plugins()
-        
-        stats = {
-            "total_plugins": len(plugins),
-            "enabled_plugins": len(plugins),  # All enabled by default for now
-            "disabled_plugins": 0,
-            "categories": {},
-            "user_plugins": {}
-        }
-        
-        for plugin_name, plugin_class in plugins.items():
-            try:
-                plugin_info = plugin_class.get_info()
-                category = plugin_info.get("category", "general")
-                
-                # Count by category
-                if category not in stats["categories"]:
-                    stats["categories"][category] = 0
-                stats["categories"][category] += 1
-                
-                # All plugins enabled by default for now
-                stats["user_plugins"][plugin_name] = {
-                    "enabled": True,
-                    "category": category
-                }
-                
-            except Exception as e:
-                logger.warning(f"Error getting stats for plugin {plugin_name}: {e}")
-                continue
-        
-        return stats
-        
-    except Exception as e:
-        logger.error(f"Error getting plugin stats: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get plugin statistics: {str(e)}"
-        )

@@ -19,6 +19,11 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+type RetriableRequestConfig = {
+  _retry?: boolean;
+  url?: string;
+};
+
 class APIClient {
   private client: AxiosInstance;
 
@@ -43,12 +48,20 @@ class APIClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        if (error.response?.status === 401) {
+        const config = (error.config || {}) as RetriableRequestConfig;
+        const url = config.url || '';
+        const isAuthEndpoint =
+          url.includes('/api/v1/auth/login') ||
+          url.includes('/api/v1/auth/register') ||
+          url.includes('/api/v1/auth/refresh');
+
+        if (error.response?.status === 401 && !config._retry && !isAuthEndpoint) {
+          config._retry = true;
           // Try to refresh token
           try {
             await this.refreshToken();
             // Retry original request
-            return this.client.request(error.config!);
+            return this.client.request(config);
           } catch {
             // Refresh failed, logout
             this.logout();
@@ -113,9 +126,17 @@ class APIClient {
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) throw new Error('No refresh token');
 
-    const response = await this.client.post<AuthResponse>('/api/v1/auth/refresh', {
-      refresh_token: refreshToken,
-    });
+    // Use a plain axios call to avoid interceptor recursion on /auth/refresh.
+    const response = await axios.post<AuthResponse>(
+      `${API_URL}/api/v1/auth/refresh`,
+      {},
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${refreshToken}`,
+        },
+      }
+    );
     
     const { access_token, refresh_token: newRefreshToken } = response.data;
     this.setTokens(access_token, newRefreshToken);

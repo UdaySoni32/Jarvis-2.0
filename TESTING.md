@@ -109,7 +109,8 @@ curl http://localhost:8000/api/v1/ws/status
 
 ### CLI Interface
 ```bash
-python3 main.py
+jarvis
+# or ./jarvis
 # Type: hello
 # Type: help
 # Type: status
@@ -118,6 +119,13 @@ python3 main.py
 
 ### Voice Interface
 ```bash
+# First-time audio check (recommended before voice mode)
+python3 - <<'PY'
+import sounddevice as sd
+print("Default input/output device indexes:", sd.default.device)
+print(sd.query_devices())
+PY
+
 python3 main.py --voice
 # Say "jarvis" (wake word)
 # Ask: "What time is it?"
@@ -184,6 +192,18 @@ npm run dev
 **Solution**: Reinstall dependencies
 ```bash
 pip install -r requirements.txt
+```
+
+### Issue: Voice mode cannot access microphone/speaker
+**Solution**:
+```bash
+sudo apt install -y ffmpeg libportaudio2 portaudio19-dev libasound2-dev espeak-ng
+sudo usermod -aG audio $USER
+```
+Then log out/in and confirm `.env` has:
+```bash
+VOICE_ENABLED=true
+ENABLE_VOICE=true
 ```
 
 ### Issue: Port 8000 or 3000 already in use

@@ -24,6 +24,11 @@ if command -v apt >/dev/null 2>&1; then
             python3 \
             python3-pip \
             python3-venv \
+            ffmpeg \
+            libportaudio2 \
+            portaudio19-dev \
+            libasound2-dev \
+            espeak-ng \
             scrot \
             tesseract-ocr \
             tesseract-ocr-eng \
@@ -76,6 +81,26 @@ if [[ "$RUN_TESTS" == "--with-tests" ]]; then
 fi
 
 echo
+echo "🔗 Installing local 'jarvis' command..."
+install_local_command() {
+    local local_bin="${HOME}/.local/bin"
+    mkdir -p "$local_bin"
+    chmod +x "$SCRIPT_DIR/jarvis"
+    ln -sf "$SCRIPT_DIR/jarvis" "$local_bin/jarvis"
+}
+
+if install_local_command; then
+    echo "✅ Installed: ${HOME}/.local/bin/jarvis"
+    if [[ ":$PATH:" != *":${HOME}/.local/bin:"* ]]; then
+        echo "⚠️  ${HOME}/.local/bin is not on PATH."
+        echo "   Add this to your shell profile:"
+        echo "   export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+else
+    echo "⚠️  Could not install local jarvis command. You can still use: ./jarvis"
+fi
+
+echo
 echo "✅ Setup complete!"
 echo
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -83,9 +108,12 @@ echo "📋 Next Steps"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo
 echo "1) Add at least one model API key in .env (or use Ollama)"
-echo "2) Start API: source venv/bin/activate && python3 -m src.api.main"
-echo "3) Start Web: cd web && npm run dev"
-echo "4) Open http://localhost:3000"
+echo "2) Start JARVIS TUI: jarvis"
+echo "   (or: ./jarvis if ~/.local/bin is not on PATH yet)"
+echo "3) Re-run setup/config wizard anytime: jarvis configure"
+echo "4) Optional API server: source venv/bin/activate && python3 -m src.api.main"
+echo "5) Optional Web UI: cd web && npm run dev"
+echo "6) For voice mode, see SETUP.md -> 'First-time Voice Setup (Mic + Speaker)'"
 echo
 echo "📖 See SETUP.md and TESTING.md for full details."
 echo "🎉 Welcome to JARVIS 2.0!"

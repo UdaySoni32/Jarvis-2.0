@@ -16,27 +16,46 @@ Complete setup and installation instructions for JARVIS 2.0.
 cd ~/jarvis-2.0
 ```
 
-### 2. Setup Python Environment
+### 2. One Command Setup + Run (Recommended)
+```bash
+./jarvis setup
+# or jarvis setup if ~/.local/bin is on PATH
+```
+`jarvis setup` bootstraps dependencies, runs the configuration wizard, and starts the TUI.
+
+### 3. Start JARVIS TUI
+```bash
+jarvis
+# or ./jarvis
+```
+
+### 4. Bootstrap Dependencies Only (Optional)
+```bash
+./quick_setup.sh
+```
+This installs Python dependencies, web dependencies, creates `.env`, and installs the local `jarvis` command in `~/.local/bin`.
+
+### 5. Manual Python Environment (Optional)
 ```bash
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Setup Web Interface
+### 6. Setup Web Interface (Optional)
 ```bash
 cd web
 npm install
 cd ..
 ```
 
-### 4. Configure Environment
+### 7. Configure Environment
 ```bash
 cp .env.example .env
 # Edit .env with your API keys and settings
 ```
 
-### 5. Test Installation
+### 8. Test Installation
 ```bash
 ./quick_test.sh
 ```
@@ -72,7 +91,8 @@ Web app runs on: `http://localhost:3000`
 
 ### CLI Interface
 ```bash
-python3 main.py
+jarvis
+# or ./jarvis
 # Commands: hello, help, status, exit
 ```
 
@@ -81,6 +101,55 @@ python3 main.py
 python3 main.py --voice
 # Say "jarvis" to wake up, then ask questions
 ```
+
+## First-time Voice Setup (Mic + Speaker)
+
+JARVIS voice uses:
+- **Microphone input** via `sounddevice` (default system input device)
+- **Speaker output** via TTS engine (`pyttsx3` by default)
+
+On Linux, this access is provided through your local audio stack (ALSA/PulseAudio/PipeWire) and `/dev/snd` device permissions.
+
+### 1. Install OS audio dependencies (Ubuntu/Debian)
+```bash
+# quick_setup.sh installs these automatically, but you can run manually too
+sudo apt install -y ffmpeg libportaudio2 portaudio19-dev libasound2-dev espeak-ng
+```
+
+### 2. Enable voice in `.env`
+```bash
+VOICE_ENABLED=true
+ENABLE_VOICE=true
+STT_ENGINE=whisper
+TTS_ENGINE=pyttsx3
+```
+
+### 3. Verify microphone devices are visible
+```bash
+source venv/bin/activate
+python3 - <<'PY'
+import sounddevice as sd
+print("Default input/output device indexes:", sd.default.device)
+print(sd.query_devices())
+PY
+```
+
+### 4. Verify speaker playback (TTS)
+```bash
+source venv/bin/activate
+python3 - <<'PY'
+import pyttsx3
+engine = pyttsx3.init()
+engine.say("Jarvis voice setup successful")
+engine.runAndWait()
+PY
+```
+
+### 5. If mic access fails with permission errors
+```bash
+sudo usermod -aG audio $USER
+```
+Then log out and log back in (or reboot) so the new group membership takes effect.
 
 ## Troubleshooting
 
@@ -100,6 +169,12 @@ npm run dev
 - Check browser console for errors
 - Try HTTP mode if WebSocket fails
 - Refresh page and retry
+
+### Voice Mic/Speaker Not Working
+- Check your default input/output device in system sound settings
+- Re-run the device check in "First-time Voice Setup (Mic + Speaker)"
+- Ensure `VOICE_ENABLED=true` and `ENABLE_VOICE=true` in `.env`
+- If speaker audio is silent, test `pyttsx3` directly (step 4 above)
 
 ### Port Already in Use
 ```bash

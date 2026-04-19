@@ -134,7 +134,7 @@ class LLMManager:
                 "Please check your configuration:\n"
                 "- For OpenAI: Set OPENAI_API_KEY in .env\n"
                 "- For Ollama: Install and run Ollama (https://ollama.ai/)\n"
-                "- Run setup wizard: python -m src.cli"
+                "- Run setup wizard: jarvis configure (or ./jarvis configure)"
             )
 
     async def generate(self, prompt: str, **kwargs) -> str:

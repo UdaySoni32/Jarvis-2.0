@@ -65,6 +65,8 @@ export class WebSocketClient {
   private reconnectAttempts = 0;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private pendingMessages: WebSocketMessage[] = [];
+  private readonly maxPendingMessages = 100;
   
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -98,6 +100,7 @@ export class WebSocketClient {
         console.log("WebSocket connected");
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.flushPendingMessages();
         
         // Start heartbeat
         this.startHeartbeat();
@@ -164,17 +167,25 @@ export class WebSocketClient {
    * Send message to server
    */
   send(message: WebSocketMessage): void {
-    if (!this.isConnected || !this.ws) {
-      throw new Error("WebSocket not connected");
+    const messageToSend: WebSocketMessage = {
+      ...message,
+      timestamp: message.timestamp || Date.now() / 1000,
+    };
+
+    if (!this.ws) {
+      console.warn("WebSocket is not initialized; dropping message:", messageToSend.type);
+      return;
     }
 
-    // Add timestamp if not present
-    if (!message.timestamp) {
-      message.timestamp = Date.now() / 1000;
+    if (!this.isConnected || this.ws.readyState !== WebSocket.OPEN) {
+      if (this.pendingMessages.length >= this.maxPendingMessages) {
+        this.pendingMessages.shift();
+      }
+      this.pendingMessages.push(messageToSend);
+      return;
     }
 
-    const messageStr = JSON.stringify(message);
-    this.ws.send(messageStr);
+    this.ws.send(JSON.stringify(messageToSend));
   }
 
   /**
@@ -371,5 +382,18 @@ export class WebSocketClient {
         // scheduleReconnect will be called again via onclose handler
       });
     }, delay);
+  }
+
+  private flushPendingMessages(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.pendingMessages.length === 0) {
+      return;
+    }
+
+    const queued = [...this.pendingMessages];
+    this.pendingMessages = [];
+
+    queued.forEach((message) => {
+      this.ws!.send(JSON.stringify(message));
+    });
   }
 }

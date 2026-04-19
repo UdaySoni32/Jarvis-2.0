@@ -160,6 +160,27 @@ class WebSocketManager:
         }
         
         logger.info(f"User {user_id} disconnected from WebSocket")
+
+    @staticmethod
+    def _is_websocket_ready(websocket: WebSocket) -> bool:
+        """Return True when the socket can safely send messages."""
+        return (
+            websocket.client_state == WebSocketState.CONNECTED
+            and websocket.application_state == WebSocketState.CONNECTED
+        )
+
+    async def send_to_websocket(self, websocket: WebSocket, message: Dict[str, Any]) -> bool:
+        """Safely send a message to a specific websocket connection."""
+        if not self._is_websocket_ready(websocket):
+            return False
+
+        try:
+            await websocket.send_json(message)
+            return True
+        except Exception as e:
+            user_id = self.connection_metadata.get(websocket, {}).get("user_id", "unknown")
+            logger.warning(f"Failed to send websocket message to user {user_id}: {e}")
+            return False
     
     async def send_to_user(self, user_id: int, message: Dict[str, Any]):
         """Send message to specific user"""
@@ -168,13 +189,8 @@ class WebSocketManager:
         
         connections_to_remove = []
         for websocket in self.active_connections[user_id]:
-            try:
-                if websocket.client_state == WebSocketState.CONNECTED:
-                    await websocket.send_json(message)
-                else:
-                    connections_to_remove.append(websocket)
-            except Exception as e:
-                logger.warning(f"Failed to send message to user {user_id}: {e}")
+            sent = await self.send_to_websocket(websocket, message)
+            if not sent:
                 connections_to_remove.append(websocket)
         
         # Clean up broken connections
@@ -224,7 +240,7 @@ class WebSocketManager:
         )
         
         # Send to all users except the one typing
-        for other_user_id in self.active_connections.keys():
+        for other_user_id in list(self.active_connections.keys()):
             if other_user_id != user_id:
                 await self.send_to_user(other_user_id, typing_msg.dict())
     
@@ -251,7 +267,9 @@ class WebSocketManager:
                 type=EventType.HEARTBEAT,
                 data={"status": "alive", "server_time": time.time()}
             )
-            await websocket.send_json(heartbeat_msg.dict())
+            sent = await self.send_to_websocket(websocket, heartbeat_msg.dict())
+            if not sent:
+                await self.disconnect(websocket)
 
 
 # Global WebSocket manager instance
@@ -307,7 +325,9 @@ async def websocket_chat_endpoint(
                         "details": str(e)
                     }
                 )
-                await websocket.send_json(error_msg.dict())
+                sent = await manager.send_to_websocket(websocket, error_msg.dict())
+                if not sent:
+                    break
                 
             except json.JSONDecodeError:
                 # Handle non-JSON messages
@@ -315,7 +335,9 @@ async def websocket_chat_endpoint(
                     type=EventType.ERROR,
                     data={"error": "Message must be valid JSON"}
                 )
-                await websocket.send_json(error_msg.dict())
+                sent = await manager.send_to_websocket(websocket, error_msg.dict())
+                if not sent:
+                    break
     
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
@@ -348,7 +370,7 @@ async def handle_websocket_message(websocket: WebSocket, user: User, message: We
             type=EventType.ERROR,
             data={"error": f"Unknown message type: {message.type}"}
         )
-        await websocket.send_json(error_msg.dict())
+        await manager.send_to_websocket(websocket, error_msg.dict())
 
 
 async def handle_chat_message(websocket: WebSocket, user: User, message: WebSocketMessage):
@@ -370,7 +392,9 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
                     "user_type": "assistant"
                 }
             )
-            await websocket.send_json(response_msg.dict())
+            sent = await manager.send_to_websocket(websocket, response_msg.dict())
+            if not sent:
+                return
             
             # Stream LLM response
             full_response = ""
@@ -391,7 +415,9 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
                         "full_content": full_response
                     }
                 )
-                await websocket.send_json(chunk_msg.dict())
+                sent = await manager.send_to_websocket(websocket, chunk_msg.dict())
+                if not sent:
+                    return
                 
                 # Small delay to prevent overwhelming the client
                 await asyncio.sleep(0.05)
@@ -407,7 +433,7 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
                     "user_type": "assistant"
                 }
             )
-            await websocket.send_json(completion_msg.dict())
+            await manager.send_to_websocket(websocket, completion_msg.dict())
         
         else:
             # Handle non-streaming response
@@ -422,7 +448,7 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
                     "user_type": "assistant"
                 }
             )
-            await websocket.send_json(response_msg.dict())
+            await manager.send_to_websocket(websocket, response_msg.dict())
     
     except Exception as e:
         logger.error(f"Error handling chat message: {e}")
@@ -430,7 +456,7 @@ async def handle_chat_message(websocket: WebSocket, user: User, message: WebSock
             type=EventType.ERROR,
             data={"error": f"Failed to process chat message: {str(e)}"}
         )
-        await websocket.send_json(error_msg.dict())
+        await manager.send_to_websocket(websocket, error_msg.dict())
 
 
 async def handle_typing_indicator(websocket: WebSocket, user: User, message: WebSocketMessage):
@@ -476,7 +502,7 @@ async def handle_system_message(websocket: WebSocket, user: User, message: WebSo
                     "users": online_users
                 }
             )
-            await websocket.send_json(response_msg.dict())
+            await manager.send_to_websocket(websocket, response_msg.dict())
         
         elif command == "ping":
             response_msg = WebSocketMessage(
@@ -486,14 +512,14 @@ async def handle_system_message(websocket: WebSocket, user: User, message: WebSo
                     "server_time": time.time()
                 }
             )
-            await websocket.send_json(response_msg.dict())
+            await manager.send_to_websocket(websocket, response_msg.dict())
         
         else:
             error_msg = WebSocketMessage(
                 type=EventType.ERROR,
                 data={"error": f"Unknown system command: {command}"}
             )
-            await websocket.send_json(error_msg.dict())
+            await manager.send_to_websocket(websocket, error_msg.dict())
             
     except Exception as e:
         logger.error(f"Error handling system message: {e}")

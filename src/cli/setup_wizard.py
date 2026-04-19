@@ -209,7 +209,8 @@ This wizard will help you configure JARVIS for first use.
 JARVIS 2.0 is now configured and ready to use!
 
 [bold]To start JARVIS:[/bold]
-  [cyan]python -m src.cli[/cyan]
+  [cyan]jarvis[/cyan]
+  [dim](or ./jarvis if not on PATH)[/dim]
 
 [bold]Quick tips:[/bold]
   • Type [cyan]help[/cyan] to see available commands

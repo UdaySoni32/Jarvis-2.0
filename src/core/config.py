@@ -71,6 +71,29 @@ class Settings(BaseSettings):
     voice_enabled: bool = Field(default=False, alias="VOICE_ENABLED")
     tts_engine: str = Field(default="pyttsx3", alias="TTS_ENGINE")
     stt_engine: str = Field(default="whisper", alias="STT_ENGINE")
+    voice_profile: str = Field(default="local", alias="VOICE_PROFILE")
+    voice_stt_provider: str = Field(default="whisper", alias="VOICE_STT_PROVIDER")
+    voice_tts_provider: str = Field(default="pyttsx3", alias="VOICE_TTS_PROVIDER")
+    voice_cloud_stt_provider: str = Field(default="whisper", alias="VOICE_CLOUD_STT_PROVIDER")
+    voice_cloud_tts_provider: str = Field(default="gtts", alias="VOICE_CLOUD_TTS_PROVIDER")
+    voice_fallback_to_local: bool = Field(default=True, alias="VOICE_FALLBACK_TO_LOCAL")
+    voice_language: str = Field(default="en", alias="VOICE_LANGUAGE")
+    whisper_model: str = Field(default="base", alias="WHISPER_MODEL")
+    use_whisper_api: bool = Field(default=False, alias="USE_WHISPER_API")
+    google_stt_use_cloud: bool = Field(default=False, alias="GOOGLE_STT_USE_CLOUD")
+    google_application_credentials: Optional[str] = Field(
+        default=None,
+        alias="GOOGLE_APPLICATION_CREDENTIALS",
+    )
+    tts_rate: int = Field(default=200, alias="TTS_RATE")
+    tts_volume: float = Field(default=0.9, alias="TTS_VOLUME")
+    elevenlabs_api_key: Optional[str] = Field(default=None, alias="ELEVENLABS_API_KEY")
+    elevenlabs_voice_id: str = Field(default="21m00Tcm4TlvDq8ikWAM", alias="ELEVENLABS_VOICE_ID")
+    enable_wake_word: bool = Field(default=False, alias="ENABLE_WAKE_WORD")
+    wake_word_phrase: str = Field(default="Jarvis", alias="WAKE_WORD_PHRASE")
+    wake_word_keyword_path: Optional[str] = Field(default=None, alias="WAKE_WORD_KEYWORD_PATH")
+    wake_word_sensitivity: float = Field(default=0.5, alias="WAKE_WORD_SENSITIVITY")
+    porcupine_access_key: Optional[str] = Field(default=None, alias="PORCUPINE_ACCESS_KEY")
 
     # User Data
     user_data_dir: Path = Field(default=Path("./user_data"), alias="USER_DATA_DIR")
@@ -115,7 +138,7 @@ class Settings(BaseSettings):
     @property
     def can_use_cloud_llm(self) -> bool:
         """Check if any cloud LLM is available."""
-        return self.has_openai_key or self.has_anthropic_key
+        return self.has_openai_key or self.has_anthropic_key or self.has_gemini_key
 
 
 # Global settings instance

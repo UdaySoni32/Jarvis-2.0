@@ -96,7 +96,7 @@ class LLMManager:
             else:
                 raise ValueError(
                     f"Unknown LLM provider: {provider_name}. "
-                    "Valid options: openai, ollama, claude"
+                    "Valid options: openai, ollama, claude, gemini"
                 )
 
             # Test if provider is available
@@ -133,6 +133,8 @@ class LLMManager:
                 f"Failed to initialize LLM provider: {e}\n\n"
                 "Please check your configuration:\n"
                 "- For OpenAI: Set OPENAI_API_KEY in .env\n"
+                "- For Claude: Set ANTHROPIC_API_KEY in .env\n"
+                "- For Gemini: Set GEMINI_API_KEY in .env\n"
                 "- For Ollama: Install and run Ollama (https://ollama.ai/)\n"
                 "- Run setup wizard: jarvis configure (or ./jarvis configure)"
             )

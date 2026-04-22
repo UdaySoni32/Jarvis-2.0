@@ -74,3 +74,18 @@ def test_main_run_invokes_repl(monkeypatch):
     monkeypatch.setattr(launcher, "_run_repl", lambda: 0)
     result = launcher.main(["run"])
     assert result == 0
+
+
+def test_build_parser_supports_voice_command():
+    parser = launcher.build_parser()
+    args = parser.parse_args(["voice", "--profile", "cloud", "--stt", "whisper", "--tts", "gtts"])
+    assert args.command == "voice"
+    assert args.profile == "cloud"
+    assert args.stt == "whisper"
+    assert args.tts == "gtts"
+
+
+def test_main_voice_invokes_runner(monkeypatch):
+    monkeypatch.setattr(launcher, "_run_voice", lambda args: 0)
+    result = launcher.main(["voice", "--profile", "local"])
+    assert result == 0

@@ -28,7 +28,7 @@ class SetupWizard:
 This wizard will help you configure JARVIS for first use.
 
 [yellow]What we'll set up:[/yellow]
-  • Choose your AI provider (OpenAI, Claude, or local Ollama)
+  • Choose your AI provider (OpenAI, Claude, Gemini, or local Ollama)
   • Configure API keys (if needed)
   • Set up preferences
   • Test your configuration
@@ -49,6 +49,7 @@ This wizard will help you configure JARVIS for first use.
                 ("openai", "OpenAI GPT-4 (Best quality, requires API key, ~$0.03/1K tokens)"),
                 ("ollama", "Ollama (Free, runs locally, requires installation)"),
                 ("claude", "Anthropic Claude (High quality, requires API key)"),
+                ("gemini", "Google Gemini (Balanced quality/speed, requires API key)"),
             ],
         ).run_async()
 
@@ -69,6 +70,11 @@ This wizard will help you configure JARVIS for first use.
                 "name": "Anthropic Claude",
                 "url": "https://console.anthropic.com/",
                 "env_var": "ANTHROPIC_API_KEY",
+            },
+            "gemini": {
+                "name": "Google Gemini",
+                "url": "https://aistudio.google.com/app/apikey",
+                "env_var": "GEMINI_API_KEY",
             },
         }
 
@@ -152,6 +158,21 @@ This wizard will help you configure JARVIS for first use.
                     # Test Claude connection
                     console.print("[yellow]Claude connection test not implemented yet[/yellow]")
                     return True
+
+                elif provider == "gemini":
+                    # Test Gemini connection
+                    import google.generativeai as genai
+
+                    api_key = self.config.get("GEMINI_API_KEY")
+                    model_name = self.config.get("GEMINI_MODEL", "gemini-1.5-pro")
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel(model_name)
+                    response = await model.generate_content_async("ping")
+                    if response and getattr(response, "text", ""):
+                        progress.update(task, description="✅ Gemini connection successful!")
+                        return True
+                    progress.update(task, description="❌ Gemini connection failed!")
+                    return False
 
                 elif provider == "ollama":
                     # Test Ollama connection
@@ -253,6 +274,9 @@ JARVIS 2.0 is now configured and ready to use!
                 elif provider == "claude":
                     self.config["ANTHROPIC_API_KEY"] = api_key
                     self.config["CLAUDE_MODEL"] = "claude-3-opus-20240229"
+                elif provider == "gemini":
+                    self.config["GEMINI_API_KEY"] = api_key
+                    self.config["GEMINI_MODEL"] = "gemini-1.5-pro"
 
             # Step 3: Configure features
             features = await self.configure_features()
@@ -312,6 +336,9 @@ def needs_setup() -> bool:
         return True
     
     if "DEFAULT_LLM=claude" in env_content and "ANTHROPIC_API_KEY=" not in env_content:
+        return True
+
+    if "DEFAULT_LLM=gemini" in env_content and "GEMINI_API_KEY=" not in env_content:
         return True
     
     return False

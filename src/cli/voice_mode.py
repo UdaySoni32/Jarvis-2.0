@@ -8,6 +8,7 @@ import logging
 import asyncio
 import inspect
 from typing import Optional
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -70,50 +71,45 @@ class VoiceMode:
         """Initialize voice components"""
         try:
             console.print("\n[yellow]🎙️  Initializing voice mode...[/yellow]")
-            
-            # Create STT engine
-            stt_provider = getattr(settings, 'voice_stt_provider', 'whisper')
-            console.print(f"[dim]Setting up {stt_provider} for speech recognition...[/dim]")
-            
-            stt_args = {}
-            if stt_provider == 'whisper':
-                stt_args = {
-                    'model_size': getattr(settings, 'whisper_model', 'base'),
-                    'device': 'cpu',
-                    'use_api': getattr(settings, 'use_whisper_api', False),
-                }
-                if stt_args['use_api']:
-                    stt_args['api_key'] = settings.openai_api_key
-            
-            stt_engine = create_stt_engine(stt_provider, **stt_args)
-            
-            # Create TTS engine
-            tts_provider = getattr(settings, 'voice_tts_provider', 'pyttsx3')
-            console.print(f"[dim]Setting up {tts_provider} for text-to-speech...[/dim]")
-            
-            tts_args = {}
-            if tts_provider == 'pyttsx3':
-                tts_args = {
-                    'rate': getattr(settings, 'tts_rate', 200),
-                    'volume': getattr(settings, 'tts_volume', 0.9),
-                }
-            elif tts_provider == 'elevenlabs':
-                tts_args = {
-                    'api_key': getattr(settings, 'elevenlabs_api_key', ''),
-                }
-            
-            tts_engine = create_tts_engine(tts_provider, **tts_args)
-            
-            # Create audio manager
+
+            profile = getattr(settings, "voice_profile", "local").strip().lower()
+            if profile not in {"local", "cloud"}:
+                raise ValueError("VOICE_PROFILE must be 'local' or 'cloud'")
+
+            devices = AudioManager.list_devices()
+            if not devices:
+                raise RuntimeError(
+                    "No microphone devices found. Check mic connection and system audio permissions."
+                )
+
+            stt_provider = getattr(settings, "voice_stt_provider", "whisper")
+            tts_provider = getattr(settings, "voice_tts_provider", "pyttsx3")
+
+            if profile == "cloud":
+                stt_provider = getattr(settings, "voice_cloud_stt_provider", stt_provider)
+                tts_provider = getattr(settings, "voice_cloud_tts_provider", tts_provider)
+
+            console.print(
+                f"[dim]Voice profile: {profile} | STT: {stt_provider} | TTS: {tts_provider}[/dim]"
+            )
+
+            try:
+                stt_engine = self._create_stt_engine(stt_provider, profile)
+                tts_engine = self._create_tts_engine(tts_provider, profile)
+            except Exception as primary_error:
+                if profile == "cloud" and getattr(settings, "voice_fallback_to_local", True):
+                    console.print(
+                        f"[yellow]⚠️ Cloud voice init failed ({primary_error}). "
+                        "Falling back to local voice stack.[/yellow]"
+                    )
+                    stt_engine = self._create_stt_engine("whisper", "local")
+                    tts_engine = self._create_tts_engine("pyttsx3", "local")
+                else:
+                    raise
+
             audio_manager = AudioManager()
-            
-            # Create wake word detector if enabled
-            wake_word_detector = None
-            if getattr(settings, 'enable_wake_word', False):
-                porcupine_key = getattr(settings, 'porcupine_access_key', None)
-                if porcupine_key:
-                    console.print("[dim]Initializing wake word detection...[/dim]")
-                    wake_word_detector = WakeWordDetector(access_key=porcupine_key)
+
+            wake_word_detector = self._create_wake_word_detector()
             
             # Create voice assistant
             self.assistant = VoiceAssistant(
@@ -133,6 +129,88 @@ class VoiceMode:
             console.print("[yellow]💡 Tip: Install voice dependencies with:[/yellow]")
             console.print("[dim]pip install openai-whisper pyttsx3 sounddevice soundfile[/dim]\n")
             return False
+
+    def _create_stt_engine(self, provider: str, profile: str):
+        provider = provider.strip().lower()
+        console.print(f"[dim]Setting up {provider} for speech recognition...[/dim]")
+
+        stt_args = {}
+        if provider == "whisper":
+            use_api = bool(getattr(settings, "use_whisper_api", False)) or profile == "cloud"
+            stt_args = {
+                "model_size": getattr(settings, "whisper_model", "base"),
+                "device": "cpu",
+                "use_api": use_api,
+            }
+            if use_api:
+                if not settings.openai_api_key:
+                    raise ValueError("OPENAI_API_KEY is required for cloud Whisper API mode")
+                stt_args["api_key"] = settings.openai_api_key
+
+        elif provider == "google":
+            use_cloud = bool(getattr(settings, "google_stt_use_cloud", False)) or profile == "cloud"
+            credentials_file = getattr(settings, "google_application_credentials", None)
+            if use_cloud and not credentials_file:
+                console.print(
+                    "[yellow]⚠️ GOOGLE_APPLICATION_CREDENTIALS not set; "
+                    "using Google free STT mode instead of Google Cloud STT.[/yellow]"
+                )
+                use_cloud = False
+            stt_args = {
+                "language": getattr(settings, "voice_language", "en-US"),
+                "use_cloud": use_cloud,
+                "credentials_file": credentials_file,
+            }
+        return create_stt_engine(provider, **stt_args)
+
+    def _create_tts_engine(self, provider: str, profile: str):
+        provider = provider.strip().lower()
+        console.print(f"[dim]Setting up {provider} for text-to-speech...[/dim]")
+
+        tts_args = {}
+        if provider == "pyttsx3":
+            tts_args = {
+                "rate": getattr(settings, "tts_rate", 200),
+                "volume": getattr(settings, "tts_volume", 0.9),
+            }
+        elif provider == "elevenlabs":
+            api_key = getattr(settings, "elevenlabs_api_key", None)
+            if not api_key:
+                raise ValueError("ELEVENLABS_API_KEY is required for ElevenLabs TTS")
+            tts_args = {
+                "api_key": api_key,
+                "voice_id": getattr(settings, "elevenlabs_voice_id", "21m00Tcm4TlvDq8ikWAM"),
+            }
+        elif provider == "gtts":
+            tts_args = {
+                "language": getattr(settings, "voice_language", "en"),
+                "slow": False,
+            }
+
+        return create_tts_engine(provider, **tts_args)
+
+    def _create_wake_word_detector(self):
+        if not getattr(settings, "enable_wake_word", False):
+            return None
+
+        porcupine_key = getattr(settings, "porcupine_access_key", None)
+        if not porcupine_key:
+            raise ValueError("PORCUPINE_ACCESS_KEY is required when ENABLE_WAKE_WORD=true")
+
+        keyword_paths = None
+        keyword_path = getattr(settings, "wake_word_keyword_path", None)
+        if keyword_path:
+            resolved = Path(keyword_path).expanduser().resolve()
+            if not resolved.exists():
+                raise FileNotFoundError(f"Wake-word keyword file not found: {resolved}")
+            keyword_paths = [str(resolved)]
+
+        console.print("[dim]Initializing wake word detection...[/dim]")
+        return WakeWordDetector(
+            access_key=porcupine_key,
+            keyword_paths=keyword_paths,
+            sensitivities=[float(getattr(settings, "wake_word_sensitivity", 0.5))],
+        )
     
     def show_voice_help(self):
         """Show voice mode help"""
@@ -414,7 +492,9 @@ class VoiceMode:
             return
         
         console.print("\n[green]👂 Wake word mode active![/green]")
-        console.print("[dim]Say 'Hey JARVIS' to activate...[/dim]\n")
+        console.print(
+            f"[dim]Say '{getattr(settings, 'wake_word_phrase', 'Jarvis')}' to activate...[/dim]\n"
+        )
         
         async def on_wake_word():
             """Handle wake word detection"""
@@ -425,6 +505,11 @@ class VoiceMode:
             user_input = self.assistant.listen(duration=5.0)
             
             if user_input:
+                normalized = user_input.strip().lower()
+                if normalized in {"sleep", "stop listening"}:
+                    self.assistant.speak("Going to sleep mode.")
+                    return
+
                 console.print(Panel(
                     user_input,
                     title="[cyan]You said[/cyan]",
@@ -432,7 +517,15 @@ class VoiceMode:
                 ))
                 
                 # Get and speak response
-                response = await self.conversation_handler(user_input)
+                routed_input, route = self.intent_router.route_input(
+                    user_input,
+                    explicit_mode=self.active_mode,
+                )
+                response = await self._invoke_conversation_handler(
+                    routed_input=routed_input,
+                    original_input=user_input,
+                    mode=route.mode,
+                )
                 if response:
                     console.print(Panel(
                         response,

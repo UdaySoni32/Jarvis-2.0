@@ -25,7 +25,7 @@ echo "🔍 Checking Python dependencies..."
 source venv/bin/activate
 
 # Check key packages
-python3 -c "import fastapi, uvicorn, websockets" 2>/dev/null
+python3 -c "import fastapi, uvicorn, websockets, rich" 2>/dev/null
 if [[ $? -eq 0 ]]; then
     echo "✅ FastAPI and WebSocket dependencies installed"
 else
@@ -34,28 +34,15 @@ else
     exit 1
 fi
 
-# Check web dependencies
-echo "🔍 Checking web dependencies..."
-if [[ -f "web/package.json" && -d "web/node_modules" ]]; then
-    echo "✅ Web dependencies installed"
-elif [[ -f "web/package.json" ]]; then
-    echo "⚠️  Web dependencies need installation"
-    echo "   Run: cd web && npm install"
-else
-    echo "❌ Web interface not found"
-fi
-
 echo
 echo "🚀 READY TO TEST! Run these commands:"
 echo
-echo "Terminal 1 (API Server):"
+echo "Terminal 1 (TUI):"
+echo "  jarvis"
+echo
+echo "Terminal 2 (optional API Server):"
 echo "  source venv/bin/activate"
 echo "  python3 -m src.api.main"
 echo
-echo "Terminal 2 (Web App):"
-echo "  cd web && npm run dev"
-echo
-echo "Then open: http://localhost:3000"
-echo
-echo "🎯 Key test: Register → Login → Send message → Watch live streaming!"
+echo "🎯 Key test: Ask JARVIS 'how is the cpu usage like'"
 echo

@@ -53,17 +53,6 @@ echo "📚 Installing Python dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-if [[ -f "web/package.json" ]]; then
-    echo
-    if command -v npm >/dev/null 2>&1; then
-        echo "🌐 Installing web dependencies..."
-        (cd web && npm install --silent)
-    else
-        echo "⚠️  npm not found; skipping web dependency install."
-        echo "   Install Node.js 18+ and run: cd web && npm install"
-    fi
-fi
-
 if [[ ! -f ".env" && -f ".env.example" ]]; then
     echo
     echo "🛠️  Creating .env from .env.example..."
@@ -112,8 +101,8 @@ echo "2) Start JARVIS TUI: jarvis"
 echo "   (or: ./jarvis if ~/.local/bin is not on PATH yet)"
 echo "3) Re-run setup/config wizard anytime: jarvis configure"
 echo "4) Optional API server: source venv/bin/activate && python3 -m src.api.main"
-echo "5) Optional Web UI: cd web && npm run dev"
-echo "6) For voice mode, see SETUP.md -> 'First-time Voice Setup (Mic + Speaker)'"
+echo "5) For voice mode, see SETUP.md -> 'First-time Voice Setup (Mic + Speaker)'"
+echo "   Quick start voice: jarvis voice --profile local"
 echo
 echo "📖 See SETUP.md and TESTING.md for full details."
 echo "🎉 Welcome to JARVIS 2.0!"

@@ -60,6 +60,44 @@ def _run_repl() -> int:
     return 0
 
 
+def _run_voice(args: argparse.Namespace) -> int:
+    """Start voice interaction mode."""
+    from ..core.config import settings
+    from .voice_mode import VoiceMode
+    from .voice_runner import VoiceConversationRuntime
+
+    if args.profile:
+        settings.voice_profile = args.profile
+    if args.stt:
+        settings.voice_stt_provider = args.stt
+    if args.tts:
+        settings.voice_tts_provider = args.tts
+    if args.wake_word:
+        settings.enable_wake_word = True
+    if args.no_wake_word:
+        settings.enable_wake_word = False
+    if args.wake_word_keyword_path:
+        settings.wake_word_keyword_path = args.wake_word_keyword_path
+
+    runtime = VoiceConversationRuntime()
+    voice_mode = VoiceMode(runtime.handle)
+
+    async def _run() -> int:
+        initialized = await voice_mode.initialize()
+        if not initialized:
+            return 1
+        try:
+            if settings.enable_wake_word:
+                await voice_mode.run_wake_word_mode()
+            else:
+                await voice_mode.run_conversation_mode()
+            return 0
+        finally:
+            voice_mode.cleanup()
+
+    return asyncio.run(_run())
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create command parser for jarvis command."""
     parser = argparse.ArgumentParser(
@@ -102,6 +140,39 @@ def build_parser() -> argparse.ArgumentParser:
         "config",
         help="alias for configure",
     )
+    voice_parser = subparsers.add_parser(
+        "voice",
+        help="start voice mode (local or cloud profile)",
+    )
+    voice_parser.add_argument(
+        "--profile",
+        choices=["local", "cloud"],
+        help="voice pipeline profile",
+    )
+    voice_parser.add_argument(
+        "--stt",
+        choices=["whisper", "google"],
+        help="override speech-to-text provider",
+    )
+    voice_parser.add_argument(
+        "--tts",
+        choices=["pyttsx3", "gtts", "elevenlabs"],
+        help="override text-to-speech provider",
+    )
+    voice_parser.add_argument(
+        "--wake-word",
+        action="store_true",
+        help="force-enable wake-word mode",
+    )
+    voice_parser.add_argument(
+        "--no-wake-word",
+        action="store_true",
+        help="force-disable wake-word mode",
+    )
+    voice_parser.add_argument(
+        "--wake-word-keyword-path",
+        help="path to Porcupine .ppn keyword file (e.g. Jarvis Babu model)",
+    )
 
     parser.set_defaults(command="run")
     return parser
@@ -132,6 +203,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
 
             return _run_repl()
+
+        if args.command == "voice":
+            return _run_voice(args)
 
         parser.print_help()
         return 1

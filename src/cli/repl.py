@@ -131,7 +131,7 @@ Welcome! I'm JARVIS, your AI-powered personal assistant.
             )
         else:
             self.console.print(
-                "⚠️  [yellow]No LLM configured![/yellow] Set OPENAI_API_KEY or use Ollama"
+                "⚠️  [yellow]No LLM configured![/yellow] Set OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, or use Ollama"
             )
 
         self.console.print()

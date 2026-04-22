@@ -31,14 +31,10 @@ test_item() {
 
 echo -e "${BLUE}📋 SYSTEM REQUIREMENTS${NC}"
 test_item "Python 3.10+" "python3 --version | grep -E '3\.(10|11|12)'"
-test_item "Node.js 18+" "node --version | grep -E 'v(18|19|20)'"
-test_item "npm" "npm --version > /dev/null"
 
 echo ""
 echo -e "${BLUE}📁 DIRECTORY STRUCTURE${NC}"
 test_item "Source code exists" "test -d src"
-test_item "Web app exists" "test -d web"
-test_item "Config exists" "test -d config"
 test_item "Tests exist" "test -d tests"
 
 echo ""
@@ -49,12 +45,6 @@ test_item "SQLAlchemy" "python3 -c 'import sqlalchemy'"
 test_item "LangChain" "python3 -c 'import langchain'"
 test_item "WebSockets" "python3 -c 'import websockets'"
 test_item "Rich" "python3 -c 'import rich'"
-
-echo ""
-echo -e "${BLUE}📚 NODE DEPENDENCIES${NC}"
-test_item "React" "cd web && npm list react | grep react >/dev/null 2>&1"
-test_item "Next.js" "cd web && npm list next | grep next >/dev/null 2>&1"
-test_item "TypeScript" "cd web && npm list typescript | grep typescript >/dev/null 2>&1"
 
 echo ""
 echo -e "${BLUE}📝 DOCUMENTATION${NC}"
@@ -78,10 +68,9 @@ if [ $FAIL -eq 0 ]; then
     echo -e "${GREEN}🎉 ALL TESTS PASSED! System is ready!${NC}"
     echo ""
     echo "Next steps:"
-    echo "1. Start API: python3 -m src.api.main"
-    echo "2. Start Web: cd web && npm run dev"
-    echo "3. Open: http://localhost:3000"
-    echo "4. API Docs: http://localhost:8000/docs"
+    echo "1. Start TUI: jarvis"
+    echo "2. Optional API: python3 -m src.api.main"
+    echo "3. API Docs: http://localhost:8000/docs"
     exit 0
 else
     echo -e "${RED}⚠️  Some tests failed. Fix the issues and try again.${NC}"
